@@ -1,8 +1,16 @@
+using Microsoft.EntityFrameworkCore;
+using PlantFlow.Api.Data;
+using PlantFlow.Api.Infrastructure;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
-builder.Services.AddHealthChecks();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+builder.Services.AddDbContext<PlantFlowDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+builder.Services.AddHealthChecks().AddDbContextCheck<PlantFlowDbContext>("database");
 
 var app = builder.Build();
 
