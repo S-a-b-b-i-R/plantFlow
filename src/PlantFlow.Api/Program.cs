@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using PlantFlow.Api.Data;
 using PlantFlow.Api.Domain.Identity;
 using PlantFlow.Api.Infrastructure;
+using PlantFlow.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,9 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<PermissionService>();
+builder.Services.AddScoped<RoleSeeder>();
 builder.Services.AddDbContext<PlantFlowDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddHealthChecks().AddDbContextCheck<PlantFlowDbContext>("database");
@@ -58,7 +62,12 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+// await DbSeeder.EnsurePlatformTenantAsync(app.Services);
 await DbSeeder.EnsurePlatformTenantAsync(app.Services);
+if (app.Environment.IsDevelopment())
+{
+    await DbSeeder.EnsureDemoTenantAsync(app.Services);
+}
 
 if (app.Environment.IsDevelopment())
 {
