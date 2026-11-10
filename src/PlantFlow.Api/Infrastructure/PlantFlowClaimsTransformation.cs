@@ -4,11 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using PlantFlow.Api.Data;
 using PlantFlow.Api.Domain.Identity;
 using PlantFlow.Api.Domain.Tenancy;
+using PlantFlow.Api.Services;
 
 namespace PlantFlow.Api.Infrastructure;
 
 // Runs after the Firebase token is validated. Finds (or creates) our user and adds our own claims.
-public class PlantFlowClaimsTransformation(PlantFlowDbContext db, IConfiguration configuration)
+public class PlantFlowClaimsTransformation(
+    PlantFlowDbContext db, IConfiguration configuration, PermissionService permissions)
     : IClaimsTransformation
 {
     public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
@@ -51,6 +53,15 @@ public class PlantFlowClaimsTransformation(PlantFlowDbContext db, IConfiguration
         if (user.IsPlatformAdmin)
         {
             identity.AddClaim(new Claim(PlantFlowClaims.PlatformAdmin, "true"));
+        }
+
+        // Only Active users get permissions; everyone else gets none.
+        if (user.Status == UserStatus.Active)
+        {
+            foreach (var permission in await permissions.GetEffectivePermissionsAsync(user.Id, user.TenantId))
+            {
+                identity.AddClaim(new Claim(PlantFlowClaims.Permission, permission));
+            }
         }
 
         principal.AddIdentity(identity);

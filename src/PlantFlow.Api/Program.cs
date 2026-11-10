@@ -43,6 +43,8 @@ builder.Services
     });
 
 builder.Services.AddTransient<IClaimsTransformation, PlantFlowClaimsTransformation>();
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
 builder.Services.AddAuthorization(options =>
 {

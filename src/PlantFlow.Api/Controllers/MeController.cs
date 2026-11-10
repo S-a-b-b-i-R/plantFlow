@@ -8,7 +8,8 @@ namespace PlantFlow.Api.Controllers;
 
 public record MeResponse(
     Guid Id, string Email, string? DisplayName, string Status,
-    bool IsPlatformAdmin, Guid TenantId, string TenantName, string TenantSlug);
+    bool IsPlatformAdmin, Guid TenantId, string TenantName, string TenantSlug,
+    IReadOnlyList<string> Permissions);
 
 [ApiController]
 [Route("api/me")]
@@ -30,6 +31,7 @@ public class MeController(PlantFlowDbContext db, ICurrentUser currentUser) : Con
 
         return new MeResponse(
             user.Id, user.Email, user.DisplayName, user.Status.ToString(),
-            user.IsPlatformAdmin, user.TenantId, user.Tenant.Name, user.Tenant.Slug);
+            user.IsPlatformAdmin, user.TenantId, user.Tenant.Name, user.Tenant.Slug,
+            User.FindAll(PlantFlowClaims.Permission).Select(c => c.Value).Order().ToList());
     }
 }
