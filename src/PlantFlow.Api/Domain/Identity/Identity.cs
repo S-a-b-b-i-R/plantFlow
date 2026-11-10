@@ -13,6 +13,7 @@ public class User : AuditableEntity, ITenantOwned
     public required string FirebaseUid { get; set; }
     public required string Email { get; set; }
     public string? DisplayName { get; set; }
+    public bool IsPlatformAdmin { get; set; }
     public UserStatus Status { get; set; } = UserStatus.Pending;
     public Guid? ApprovedBy { get; set; }
     public DateTime? ApprovedAtUtc { get; set; }
