@@ -5,6 +5,7 @@ using PlantFlow.Api.Domain.Common;
 using PlantFlow.Api.Domain.Identity;
 using PlantFlow.Api.Domain.Tenancy;
 using PlantFlow.Api.Infrastructure;
+using PlantFlow.Api.Domain.MasterData;
 
 namespace PlantFlow.Api.Data;
 
@@ -29,6 +30,8 @@ public class PlantFlowDbContext : DbContext
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<Plant> Plants => Set<Plant>();
+    public DbSet<BatchingPlant> BatchingPlants => Set<BatchingPlant>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
