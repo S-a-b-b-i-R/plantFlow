@@ -53,19 +53,19 @@ public class PlantsController(PlantFlowDbContext db, ICurrentUser currentUser, A
     [HttpGet]
     [HasPermission(Permissions.MasterDataView)]
     public async Task<ActionResult<PagedResult<PlantSummaryDto>>> List(
-        [FromQuery] PageQuery page, [FromQuery] ActiveStatus? status, CancellationToken cancellationToken)
+        [FromQuery] PageQuery paging, [FromQuery] ActiveStatus? status, CancellationToken cancellationToken)
     {
         var query = db.Plants.AsNoTracking();
 
         if (status is not null) query = query.Where(p => p.Status == status);
 
-        if (!string.IsNullOrWhiteSpace(page.Search))
+        if (!string.IsNullOrWhiteSpace(paging.Search))
         {
-            var search = page.Search.Trim();
+            var search = paging.Search.Trim();
             query = query.Where(p => p.Code.Contains(search) || p.Name.Contains(search));
         }
 
-        query = page.Sort?.ToLowerInvariant() switch
+        query = paging.Sort?.ToLowerInvariant() switch
         {
             "name" => query.OrderBy(p => p.Name),
             "-name" => query.OrderByDescending(p => p.Name),
@@ -73,7 +73,7 @@ public class PlantsController(PlantFlowDbContext db, ICurrentUser currentUser, A
             _ => query.OrderBy(p => p.Code)
         };
 
-        return await query.Select(ToSummary).ToPagedAsync(page, cancellationToken);
+        return await query.Select(ToSummary).ToPagedAsync(paging, cancellationToken);
     }
 
     [HttpGet("{id:guid}")]
