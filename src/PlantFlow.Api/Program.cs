@@ -67,7 +67,13 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
-// await DbSeeder.EnsurePlatformTenantAsync(app.Services);
+// Tests set this so a fresh container gets the schema before seeding. Off by default.
+if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+{
+    using var migrationScope = app.Services.CreateScope();
+    await migrationScope.ServiceProvider.GetRequiredService<PlantFlowDbContext>().Database.MigrateAsync();
+}
+
 await DbSeeder.EnsurePlatformTenantAsync(app.Services);
 if (app.Environment.IsDevelopment())
 {
