@@ -32,6 +32,9 @@ public class PlantFlowDbContext : DbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Plant> Plants => Set<Plant>();
     public DbSet<BatchingPlant> BatchingPlants => Set<BatchingPlant>();
+    public DbSet<SalesRep> SalesReps => Set<SalesRep>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Site> Sites => Set<Site>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
