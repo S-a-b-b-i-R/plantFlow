@@ -7,6 +7,7 @@ using PlantFlow.Api.Data;
 using PlantFlow.Api.Domain.Identity;
 using PlantFlow.Api.Infrastructure;
 using PlantFlow.Api.Services;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,13 +15,15 @@ var firebaseProjectId = builder.Configuration["Firebase:ProjectId"]
     ?? throw new InvalidOperationException(
         "Firebase:ProjectId is not configured. Set it with: dotnet user-secrets set \"Firebase:ProjectId\" \"<id>\"");
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddOpenApi();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<PermissionService>();
 builder.Services.AddScoped<RoleSeeder>();
+builder.Services.AddScoped<AuditWriter>();
 builder.Services.AddDbContext<PlantFlowDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddHealthChecks().AddDbContextCheck<PlantFlowDbContext>("database");

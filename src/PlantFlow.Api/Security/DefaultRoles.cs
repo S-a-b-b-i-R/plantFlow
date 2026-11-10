@@ -5,9 +5,10 @@ namespace PlantFlow.Api.Domain.Security;
 // The roles every new company starts with. Admins can change them later.
 public static class DefaultRoles
 {
+    public const string AdminRoleName = "Admin";
     public static readonly IReadOnlyDictionary<string, string[]> All = new Dictionary<string, string[]>
     {
-        ["Admin"] = Permissions.All.ToArray(),
+        [AdminRoleName] = Permissions.All.ToArray(),
 
         ["Sales Representative"] =
         [
