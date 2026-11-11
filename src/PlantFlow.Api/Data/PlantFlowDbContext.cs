@@ -37,6 +37,8 @@ public class PlantFlowDbContext : DbContext
     public DbSet<Site> Sites => Set<Site>();
     public DbSet<Driver> Drivers => Set<Driver>();
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
+    public DbSet<Material> Materials => Set<Material>();
+    public DbSet<Product> Products => Set<Product>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

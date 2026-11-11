@@ -135,3 +135,36 @@ public class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
         builder.HasOne<Tenant>().WithMany().HasForeignKey(v => v.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class MaterialConfiguration : IEntityTypeConfiguration<Material>
+{
+    public void Configure(EntityTypeBuilder<Material> builder)
+    {
+        builder.HasKey(m => m.Id);
+        builder.Property(m => m.Code).HasMaxLength(20).IsRequired();
+        builder.Property(m => m.Name).HasMaxLength(200).IsRequired();
+        builder.Property(m => m.Category).HasConversion<string>().HasMaxLength(20);
+        builder.Property(m => m.Unit).HasConversion<string>().HasMaxLength(20);
+        builder.Property(m => m.Status).HasConversion<string>().HasMaxLength(20);
+
+        builder.HasIndex(m => new { m.TenantId, m.Code }).IsUnique();
+
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(m => m.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class ProductConfiguration : IEntityTypeConfiguration<Product>
+{
+    public void Configure(EntityTypeBuilder<Product> builder)
+    {
+        builder.HasKey(p => p.Id);
+        builder.Property(p => p.Code).HasMaxLength(20).IsRequired();
+        builder.Property(p => p.Name).HasMaxLength(200).IsRequired();
+        builder.Property(p => p.StrengthClass).HasMaxLength(20).IsRequired();
+        builder.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+
+        builder.HasIndex(p => new { p.TenantId, p.Code }).IsUnique();
+
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(p => p.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
