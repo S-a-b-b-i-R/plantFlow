@@ -340,6 +340,48 @@ namespace PlantFlow.Api.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.MasterData.Driver", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("Drivers");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.MasterData.Plant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -519,6 +561,72 @@ namespace PlantFlow.Api.Migrations
                     b.ToTable("Sites");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.MasterData.Vehicle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("CapacityCft")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("DefaultDriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PlantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PlateNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DefaultDriverId");
+
+                    b.HasIndex("PlantId");
+
+                    b.HasIndex("TenantId", "Code")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "PlateNumber")
+                        .IsUnique()
+                        .HasFilter("[PlateNumber] IS NOT NULL");
+
+                    b.ToTable("Vehicles");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Tenancy.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -674,6 +782,15 @@ namespace PlantFlow.Api.Migrations
                     b.Navigation("SalesRep");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.MasterData.Driver", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.MasterData.Plant", b =>
                 {
                     b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
@@ -717,6 +834,30 @@ namespace PlantFlow.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.MasterData.Vehicle", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Driver", "DefaultDriver")
+                        .WithMany()
+                        .HasForeignKey("DefaultDriverId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Plant", "Plant")
+                        .WithMany()
+                        .HasForeignKey("PlantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DefaultDriver");
+
+                    b.Navigation("Plant");
                 });
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Identity.Role", b =>

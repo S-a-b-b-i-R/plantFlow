@@ -102,3 +102,36 @@ public class SiteConfiguration : IEntityTypeConfiguration<Site>
         builder.HasOne<Tenant>().WithMany().HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class DriverConfiguration : IEntityTypeConfiguration<Driver>
+{
+    public void Configure(EntityTypeBuilder<Driver> builder)
+    {
+        builder.HasKey(d => d.Id);
+        builder.Property(d => d.Name).HasMaxLength(200).IsRequired();
+        builder.Property(d => d.Phone).HasMaxLength(30);
+        builder.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);
+
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(d => d.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
+{
+    public void Configure(EntityTypeBuilder<Vehicle> builder)
+    {
+        builder.HasKey(v => v.Id);
+        builder.Property(v => v.Code).HasMaxLength(20).IsRequired();
+        builder.Property(v => v.Type).HasConversion<string>().HasMaxLength(20);
+        builder.Property(v => v.CapacityCft).HasPrecision(8, 2);
+        builder.Property(v => v.PlateNumber).HasMaxLength(30);
+        builder.Property(v => v.Status).HasConversion<string>().HasMaxLength(20);
+
+        builder.HasIndex(v => new { v.TenantId, v.Code }).IsUnique();
+        builder.HasIndex(v => new { v.TenantId, v.PlateNumber }).IsUnique().HasFilter("[PlateNumber] IS NOT NULL");
+
+        builder.HasOne(v => v.Plant).WithMany().HasForeignKey(v => v.PlantId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(v => v.DefaultDriver).WithMany().HasForeignKey(v => v.DefaultDriverId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(v => v.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
