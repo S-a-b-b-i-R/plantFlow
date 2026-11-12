@@ -90,7 +90,7 @@ public class MaterialsController(PlantFlowDbContext db, ICurrentUser currentUser
             TenantId = tenantId,
             Code = code,
             Name = request.Name.Trim(),
-            Category = request.Category,
+            Category = request.Category!.Value,
             Unit = request.Unit,
             Status = request.Status
         };
@@ -119,7 +119,7 @@ public class MaterialsController(PlantFlowDbContext db, ICurrentUser currentUser
 
         material.Code = code;
         material.Name = request.Name.Trim();
-        material.Category = request.Category;
+        material.Category = request.Category!.Value;
         material.Unit = request.Unit;
         material.Status = request.Status;
 
