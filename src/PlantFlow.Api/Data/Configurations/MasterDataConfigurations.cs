@@ -168,3 +168,22 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.HasOne<Tenant>().WithMany().HasForeignKey(p => p.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class ServiceChargeConfiguration : IEntityTypeConfiguration<ServiceCharge>
+{
+    public void Configure(EntityTypeBuilder<ServiceCharge> builder)
+    {
+        builder.HasKey(s => s.Id);
+        builder.Property(s => s.Code).HasMaxLength(20).IsRequired();
+        builder.Property(s => s.Name).HasMaxLength(200).IsRequired();
+        builder.Property(s => s.Kind).HasConversion<string>().HasMaxLength(20);
+        builder.Property(s => s.Basis).HasConversion<string>().HasMaxLength(20);
+        builder.Property(s => s.DefaultAmount).HasPrecision(18, 2);
+        builder.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
+
+        builder.HasIndex(s => new { s.TenantId, s.Code }).IsUnique();
+        builder.HasIndex(s => new { s.TenantId, s.Kind }).IsUnique();
+
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
