@@ -41,8 +41,8 @@ public class PlantShiftApiTests(ApiFactory factory)
         var shifts = await admin.GetFromJsonAsync<List<PlantShiftDto>>($"/api/plants/{plantId}/shifts", ApiFactory.Json);
 
         Assert.Equal(["Morning", "Afternoon", "Evening"], shifts!.Select(s => s.Name));
-        Assert.All(shifts, s => Assert.Equal(480, s.DurationMinutes));
-        Assert.Equal([false, false, true], shifts.Select(s => s.CrossesMidnight));
+        Assert.All(shifts!, s => Assert.Equal(480, s.DurationMinutes));
+        Assert.Equal([false, false, true], shifts!.Select(s => s.CrossesMidnight));
     }
 
     [Fact]
