@@ -1,0 +1,105 @@
+using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using PlantFlow.Api.Data;
+using PlantFlow.Api.Domain.Security;
+using PlantFlow.Api.Domain.Tenancy;
+using PlantFlow.Api.Infrastructure;
+using PlantFlow.Api.Services;
+
+namespace PlantFlow.Api.Controllers;
+
+public record TenantSettingsDto(
+    string Name, string Slug, VolumeUnit VolumeUnit, decimal? PumpFreeAboveCft,
+    SurveyRequirement RequireSurveyBeforePlanning, decimal MinMarginPercent, int PumpRestShifts);
+
+// What every signed-in user needs to display things. Nothing commercial.
+public record PublicSettingsDto(string Name, VolumeUnit VolumeUnit);
+
+public class TenantSettingsRequest
+{
+    [Required, StringLength(200, MinimumLength = 2)]
+    public string Name { get; init; } = "";
+
+    // Display only. Volumes are always stored in CFT.
+    [Required]
+    public VolumeUnit? VolumeUnit { get; init; }
+
+    // A pump is free when the order's pump volume reaches this many CFT. Empty means never free.
+    [Range(0.01, 10_000_000.0)]
+    public decimal? PumpFreeAboveCft { get; init; }
+
+    [Required]
+    public SurveyRequirement? RequireSurveyBeforePlanning { get; init; }
+
+    [Range(0.0, 100.0)]
+    public decimal MinMarginPercent { get; init; }
+
+    // Pumps rest for this many following shifts of the same day. 0 turns the rule off.
+    [Range(0, 3)]
+    public int PumpRestShifts { get; init; } = 1;
+}
+
+[ApiController]
+[Route("api/settings")]
+public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
+{
+    private static TenantSettingsDto ToDto(Tenant t) => new(
+        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.MinMarginPercent, t.PumpRestShifts);
+
+    [HttpGet]
+    [HasPermission(Permissions.SettingsManage)]
+    public async Task<ActionResult<TenantSettingsDto>> Get(CancellationToken cancellationToken)
+    {
+        var tenant = await LoadTenantAsync(cancellationToken);
+        return ToDto(tenant);
+    }
+
+    // No permission attribute: the default policy applies, so any active signed-in user can read it.
+    [HttpGet("public")]
+    public async Task<ActionResult<PublicSettingsDto>> GetPublic(CancellationToken cancellationToken)
+    {
+        var tenant = await LoadTenantAsync(cancellationToken);
+        return new PublicSettingsDto(tenant.Name, tenant.VolumeUnit);
+    }
+
+    [HttpPut]
+    [HasPermission(Permissions.SettingsManage)]
+    public async Task<IActionResult> Update(TenantSettingsRequest request, CancellationToken cancellationToken)
+    {
+        // Money and volume thresholds have two decimals. Refuse extra digits instead of rounding them away.
+        if (request.PumpFreeAboveCft is { } threshold && threshold != Math.Round(threshold, 2))
+        {
+            return Problem(title: "The pump threshold can have at most 2 decimal places.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (request.MinMarginPercent != Math.Round(request.MinMarginPercent, 2))
+        {
+            return Problem(title: "The margin can have at most 2 decimal places.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var tenant = await LoadTenantAsync(cancellationToken);
+        var before = ToDto(tenant);
+
+        tenant.Name = request.Name.Trim();
+        tenant.VolumeUnit = request.VolumeUnit!.Value;
+        tenant.PumpFreeAboveCft = request.PumpFreeAboveCft;
+        tenant.RequireSurveyBeforePlanning = request.RequireSurveyBeforePlanning!.Value;
+        tenant.MinMarginPercent = request.MinMarginPercent;
+        tenant.PumpRestShifts = request.PumpRestShifts;
+
+        audit.Record(tenant.Id, "tenant.settings_changed", "Tenant", tenant.Id.ToString(),
+            new { Before = before, After = ToDto(tenant) });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    // Tenants are not tenant-filtered (they are the tenants), so pick the signed-in user's own explicitly.
+    private Task<Tenant> LoadTenantAsync(CancellationToken cancellationToken)
+    {
+        var tenantId = currentUser.TenantId!.Value;
+        return db.Tenants.FirstAsync(t => t.Id == tenantId, cancellationToken);
+    }
+}
