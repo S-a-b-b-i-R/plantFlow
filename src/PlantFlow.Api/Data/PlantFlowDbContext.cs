@@ -40,7 +40,7 @@ public class PlantFlowDbContext : DbContext
     public DbSet<Material> Materials => Set<Material>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ServiceCharge> ServiceCharges => Set<ServiceCharge>();
-
+    public DbSet<PlantShift> PlantShifts => Set<PlantShift>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PlantFlowDbContext).Assembly);

@@ -187,3 +187,20 @@ public class ServiceChargeConfiguration : IEntityTypeConfiguration<ServiceCharge
         builder.HasOne<Tenant>().WithMany().HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class PlantShiftConfiguration : IEntityTypeConfiguration<PlantShift>
+{
+    public void Configure(EntityTypeBuilder<PlantShift> builder)
+    {
+        builder.HasKey(s => s.Id);
+        builder.Property(s => s.Name).HasMaxLength(50).IsRequired();
+        builder.Property(s => s.StartTime).HasColumnType("time(0)");
+        builder.Property(s => s.EndTime).HasColumnType("time(0)");
+        builder.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
+
+        builder.HasIndex(s => new { s.PlantId, s.Name }).IsUnique();
+
+        builder.HasOne(s => s.Plant).WithMany().HasForeignKey(s => s.PlantId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
