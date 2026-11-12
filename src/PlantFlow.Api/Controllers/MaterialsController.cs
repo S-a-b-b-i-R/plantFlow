@@ -20,7 +20,9 @@ public class MaterialRequest
     [Required, StringLength(200, MinimumLength = 2)]
     public string Name { get; init; } = "";
 
-    public MaterialCategory Category { get; init; }
+    // Nullable + Required, so a missing value is rejected instead of silently becoming Cement.
+    [Required]
+    public MaterialCategory? Category { get; init; }
 
     public MaterialUnit Unit { get; init; } = MaterialUnit.Kg;
 

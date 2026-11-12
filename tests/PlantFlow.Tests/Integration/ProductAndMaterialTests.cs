@@ -57,6 +57,8 @@ public class ProductAndMaterialTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, badUnit.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, badCode.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, noName.StatusCode);
+        var noCategory = await admin.PostAsJsonAsync("/api/materials", new { code = "X4", name = "No category", unit = "Kg" });
+        Assert.Equal(HttpStatusCode.BadRequest, noCategory.StatusCode);
     }
 
     [Fact]
