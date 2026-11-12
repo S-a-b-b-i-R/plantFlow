@@ -847,6 +847,113 @@ namespace PlantFlow.Api.Migrations
                     b.ToTable("Vehicles");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.MixDesigns.MixDesign", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ApprovedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid?>("PlantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("RetiredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlantId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("TenantId", "ProductId", "PlantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_MixDesigns_OneOpen")
+                        .HasFilter("[Kind] = 'Standard' AND [Status] IN ('Draft', 'PendingApproval')");
+
+                    b.HasIndex("TenantId", "ProductId", "PlantId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("IX_MixDesigns_Version")
+                        .HasFilter("[Kind] = 'Standard'");
+
+                    b.ToTable("MixDesigns");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.MixDesigns.MixDesignItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MaterialId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MixDesignId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QuantityPerCft")
+                        .HasPrecision(12, 4)
+                        .HasColumnType("decimal(12,4)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MaterialId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("MixDesignId", "MaterialId")
+                        .IsUnique();
+
+                    b.ToTable("MixDesignItems");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Tenancy.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1129,6 +1236,55 @@ namespace PlantFlow.Api.Migrations
                     b.Navigation("Plant");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.MixDesigns.MixDesign", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Plant", "Plant")
+                        .WithMany()
+                        .HasForeignKey("PlantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Plant");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.MixDesigns.MixDesignItem", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Material", "Material")
+                        .WithMany()
+                        .HasForeignKey("MaterialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.MixDesigns.MixDesign", "MixDesign")
+                        .WithMany("Items")
+                        .HasForeignKey("MixDesignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Material");
+
+                    b.Navigation("MixDesign");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Identity.Role", b =>
                 {
                     b.Navigation("Permissions");
@@ -1151,6 +1307,11 @@ namespace PlantFlow.Api.Migrations
             modelBuilder.Entity("PlantFlow.Api.Domain.MasterData.Plant", b =>
                 {
                     b.Navigation("BatchingPlants");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.MixDesigns.MixDesign", b =>
+                {
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

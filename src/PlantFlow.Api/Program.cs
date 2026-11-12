@@ -78,6 +78,7 @@ await DbSeeder.EnsurePlatformTenantAsync(app.Services);
 if (app.Environment.IsDevelopment())
 {
     await DbSeeder.EnsureDemoTenantAsync(app.Services);
+    await DemoDataSeeder.EnsureDemoDataAsync(app.Services);
 }
 
 if (app.Environment.IsDevelopment())

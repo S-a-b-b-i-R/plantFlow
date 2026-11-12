@@ -6,6 +6,7 @@ using PlantFlow.Api.Domain.Identity;
 using PlantFlow.Api.Domain.Tenancy;
 using PlantFlow.Api.Infrastructure;
 using PlantFlow.Api.Domain.MasterData;
+using PlantFlow.Api.Domain.MixDesigns;
 
 namespace PlantFlow.Api.Data;
 
@@ -41,6 +42,8 @@ public class PlantFlowDbContext : DbContext
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ServiceCharge> ServiceCharges => Set<ServiceCharge>();
     public DbSet<PlantShift> PlantShifts => Set<PlantShift>();
+    public DbSet<MixDesign> MixDesigns => Set<MixDesign>();
+    public DbSet<MixDesignItem> MixDesignItems => Set<MixDesignItem>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PlantFlowDbContext).Assembly);
