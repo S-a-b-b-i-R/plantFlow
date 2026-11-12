@@ -8,6 +8,7 @@ using PlantFlow.Api.Infrastructure;
 using PlantFlow.Api.Domain.MasterData;
 using PlantFlow.Api.Domain.MixDesigns;
 using PlantFlow.Api.Domain.Costing;
+using PlantFlow.Api.Domain.Pricing;
 
 namespace PlantFlow.Api.Data;
 
@@ -50,6 +51,7 @@ public class PlantFlowDbContext : DbContext
     public DbSet<DeliveryChargeBand> DeliveryChargeBands => Set<DeliveryChargeBand>();
     public DbSet<PricingPolicy> PricingPolicies => Set<PricingPolicy>();
     public DbSet<AitRate> AitRates => Set<AitRate>();
+    public DbSet<Price> Prices => Set<Price>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PlantFlowDbContext).Assembly);
