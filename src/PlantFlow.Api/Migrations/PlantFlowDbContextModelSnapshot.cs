@@ -872,6 +872,11 @@ namespace PlantFlow.Api.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)");
 
+                    b.Property<int>("PumpRestShifts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("RequireSurveyBeforePlanning")
                         .IsRequired()
                         .HasMaxLength(30)

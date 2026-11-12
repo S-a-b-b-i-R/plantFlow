@@ -19,6 +19,8 @@ public class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         b.Property(x => x.RequireSurveyBeforePlanning).HasConversion<string>().HasMaxLength(30);
         b.Property(x => x.PumpFreeAboveCft).HasPrecision(12, 2);
         b.Property(x => x.MinMarginPercent).HasPrecision(5, 2);
+        // The default makes existing companies get 1 when the column is added. The sentinel lets a real 0 (rule off) be saved.
+        b.Property(x => x.PumpRestShifts).HasDefaultValue(1).HasSentinel(-1);
     }
 }
 
