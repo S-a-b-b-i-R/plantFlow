@@ -64,6 +64,219 @@ namespace PlantFlow.Api.Migrations
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.Costing.AitRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CustomerType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("Percent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid>("PricingPolicyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("PricingPolicyId", "CustomerType")
+                        .IsUnique();
+
+                    b.ToTable("AitRates");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Costing.DeliveryChargeBand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("ChargePerCft")
+                        .HasPrecision(12, 4)
+                        .HasColumnType("decimal(12,4)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("FromKm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)");
+
+                    b.Property<Guid?>("PlantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("ToKm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlantId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("DeliveryChargeBands");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Costing.MaterialCost", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("CostPerUnit")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("decimal(14,4)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("MaterialId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PlantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MaterialId");
+
+                    b.HasIndex("PlantId");
+
+                    b.HasIndex("TenantId", "MaterialId", "PlantId", "EffectiveFrom")
+                        .IsUnique()
+                        .HasFilter("[PlantId] IS NOT NULL");
+
+                    b.ToTable("MaterialCosts");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Costing.OverheadCost", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AmountPerCft")
+                        .HasPrecision(12, 4)
+                        .HasColumnType("decimal(12,4)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("PlantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlantId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("OverheadCosts");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Costing.PricingPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("MinMarginPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("VatPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique();
+
+                    b.ToTable("PricingPolicies");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Identity.Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1018,6 +1231,88 @@ namespace PlantFlow.Api.Migrations
                     b.ToTable("Tenants");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.Costing.AitRate", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.Costing.PricingPolicy", "PricingPolicy")
+                        .WithMany("AitRates")
+                        .HasForeignKey("PricingPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PricingPolicy");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Costing.DeliveryChargeBand", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Plant", "Plant")
+                        .WithMany()
+                        .HasForeignKey("PlantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Plant");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Costing.MaterialCost", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Material", "Material")
+                        .WithMany()
+                        .HasForeignKey("MaterialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Plant", "Plant")
+                        .WithMany()
+                        .HasForeignKey("PlantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Material");
+
+                    b.Navigation("Plant");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Costing.OverheadCost", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Plant", "Plant")
+                        .WithMany()
+                        .HasForeignKey("PlantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Plant");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Costing.PricingPolicy", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Identity.Role", b =>
                 {
                     b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", "Tenant")
@@ -1283,6 +1578,11 @@ namespace PlantFlow.Api.Migrations
                     b.Navigation("Material");
 
                     b.Navigation("MixDesign");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Costing.PricingPolicy", b =>
+                {
+                    b.Navigation("AitRates");
                 });
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Identity.Role", b =>
