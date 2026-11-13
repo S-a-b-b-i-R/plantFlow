@@ -4,43 +4,13 @@ using System.Net.Http.Json;
 using PlantFlow.Api.Controllers;
 using PlantFlow.Api.Infrastructure;
 using PlantFlow.Api.Services;
+using static PlantFlow.Tests.Integration.TestData;
 
 namespace PlantFlow.Tests.Integration;
 
 [Collection("api")]
 public class CostingTests(ApiFactory factory)
 {
-    private static async Task<Guid> MaterialAsync(HttpClient client, string code, string category, string unit)
-    {
-        var response = await client.PostAsJsonAsync("/api/materials", new { code, name = code, category, unit, status = "Active" });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<MaterialDto>(ApiFactory.Json))!.Id;
-    }
-
-    private static async Task<Guid> ProductAsync(HttpClient client, string code = "G4000")
-    {
-        var response = await client.PostAsJsonAsync("/api/products",
-            new { code, name = code, strengthClass = "4000 psi", maxAggregateMm = 20, defaultSlumpMm = 100, status = "Active" });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<ProductDto>(ApiFactory.Json))!.Id;
-    }
-
-    private static async Task<Guid> PlantAsync(HttpClient client, string code)
-    {
-        var response = await client.PostAsJsonAsync("/api/plants",
-            new { code, name = $"Plant {code}", timeZone = "Asia/Dhaka", operatingHoursPerDay = 10 });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<PlantDetailDto>(ApiFactory.Json))!.Plant.Id;
-    }
-
-    private static async Task ApprovedDesignAsync(HttpClient client, Guid productId, object items)
-    {
-        var created = await client.PostAsJsonAsync("/api/mix-designs", new { productId, items });
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        var design = (await created.Content.ReadFromJsonAsync<MixDesignDetailDto>(ApiFactory.Json))!;
-        (await client.PostAsync($"/api/mix-designs/{design.Design.Id}/submit", null)).EnsureSuccessStatusCode();
-        (await client.PostAsync($"/api/mix-designs/{design.Design.Id}/approve", null)).EnsureSuccessStatusCode();
-    }
 
     private static Task<HttpResponseMessage> MaterialCostAsync(
         HttpClient client, Guid materialId, decimal cost, string from, Guid? plantId = null) =>
@@ -77,9 +47,9 @@ public class CostingTests(ApiFactory factory)
 
     private static async Task<Simple> SimpleSetupAsync(HttpClient client)
     {
-        var productId = await ProductAsync(client);
-        var cement = await MaterialAsync(client, "CEM", "Cement", "Kg");
-        await ApprovedDesignAsync(client, productId, new[] { new { materialId = cement, quantityPerCft = 10m } });
+        var productId = await CreateProductAsync(client);
+        var cement = await CreateMaterialAsync(client, "CEM", "Cement", "Kg");
+        await CreateApprovedDesignAsync(client, productId, new[] { new { materialId = cement, quantityPerCft = 10m } });
         return new Simple(productId, cement);
     }
 
@@ -87,12 +57,12 @@ public class CostingTests(ApiFactory factory)
     public async Task The_floor_price_adds_up_every_cost_component()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
-        var productId = await ProductAsync(admin);
-        var cement = await MaterialAsync(admin, "CEM", "Cement", "Kg");
-        var sand = await MaterialAsync(admin, "SAND", "Sand", "Kg");
-        var stone = await MaterialAsync(admin, "STONE", "Stone", "Kg");
-        var water = await MaterialAsync(admin, "WATER", "Water", "Litre");
-        await ApprovedDesignAsync(admin, productId, new[]
+        var productId = await CreateProductAsync(admin);
+        var cement = await CreateMaterialAsync(admin, "CEM", "Cement", "Kg");
+        var sand = await CreateMaterialAsync(admin, "SAND", "Sand", "Kg");
+        var stone = await CreateMaterialAsync(admin, "STONE", "Stone", "Kg");
+        var water = await CreateMaterialAsync(admin, "WATER", "Water", "Litre");
+        await CreateApprovedDesignAsync(admin, productId, new[]
         {
             new { materialId = cement, quantityPerCft = 10m }, new { materialId = sand, quantityPerCft = 15m },
             new { materialId = stone, quantityPerCft = 30m }, new { materialId = water, quantityPerCft = 5m }
@@ -104,8 +74,8 @@ public class CostingTests(ApiFactory factory)
             Assert.Equal(HttpStatusCode.Created, (await MaterialCostAsync(admin, material, cost, "2026-01-01")).StatusCode);
         }
 
-        var withBridge = await PlantAsync(admin, "P1");
-        var withoutBridge = await PlantAsync(admin, "P2");
+        var withBridge = await CreatePlantAsync(admin, "P1");
+        var withoutBridge = await CreatePlantAsync(admin, "P2");
         Assert.Equal(HttpStatusCode.Created, (await OverheadAsync(admin, "Overhead", 8m)).StatusCode);
         Assert.Equal(HttpStatusCode.Created, (await OverheadAsync(admin, "Fuel", 2m)).StatusCode);
         Assert.Equal(HttpStatusCode.Created, (await OverheadAsync(admin, "BridgeToll", 2m, withBridge)).StatusCode);
@@ -148,8 +118,8 @@ public class CostingTests(ApiFactory factory)
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
         var setup = await SimpleSetupAsync(admin);
-        var p1 = await PlantAsync(admin, "P1");
-        var p2 = await PlantAsync(admin, "P2");
+        var p1 = await CreatePlantAsync(admin, "P1");
+        var p2 = await CreatePlantAsync(admin, "P2");
 
         Assert.Equal(HttpStatusCode.Created, (await MaterialCostAsync(admin, setup.Cement, 12m, "2026-01-01")).StatusCode);
         Assert.Equal(HttpStatusCode.Created, (await MaterialCostAsync(admin, setup.Cement, 14m, "2026-06-01")).StatusCode);
@@ -168,14 +138,14 @@ public class CostingTests(ApiFactory factory)
     public async Task A_missing_recipe_or_cost_gives_a_clear_conflict()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
-        var productId = await ProductAsync(admin);
-        var cement = await MaterialAsync(admin, "CEM", "Cement", "Kg");
-        var plantId = await PlantAsync(admin, "P1");
+        var productId = await CreateProductAsync(admin);
+        var cement = await CreateMaterialAsync(admin, "CEM", "Cement", "Kg");
+        var plantId = await CreatePlantAsync(admin, "P1");
 
         var noDesign = await FloorResponseAsync(admin, productId, plantId, "2026-06-01");
         Assert.Equal(HttpStatusCode.Conflict, noDesign.StatusCode);
 
-        await ApprovedDesignAsync(admin, productId, new[] { new { materialId = cement, quantityPerCft = 10m } });
+        await CreateApprovedDesignAsync(admin, productId, new[] { new { materialId = cement, quantityPerCft = 10m } });
         var noCost = await FloorResponseAsync(admin, productId, plantId, "2026-06-01");
         Assert.Equal(HttpStatusCode.Conflict, noCost.StatusCode);
 
@@ -191,8 +161,8 @@ public class CostingTests(ApiFactory factory)
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
         var setup = await SimpleSetupAsync(admin);
-        var p1 = await PlantAsync(admin, "P1");
-        var p2 = await PlantAsync(admin, "P2");
+        var p1 = await CreatePlantAsync(admin, "P1");
+        var p2 = await CreatePlantAsync(admin, "P2");
         await MaterialCostAsync(admin, setup.Cement, 12m, "2026-01-01");
 
         Assert.Equal(HttpStatusCode.Created, (await BandAsync(admin, 15m, 30m, 2m)).StatusCode);
@@ -219,8 +189,8 @@ public class CostingTests(ApiFactory factory)
     public async Task Invalid_cost_input_is_rejected()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
-        var cement = await MaterialAsync(admin, "CEM", "Cement", "Kg");
-        var plantId = await PlantAsync(admin, "P1");
+        var cement = await CreateMaterialAsync(admin, "CEM", "Cement", "Kg");
+        var plantId = await CreatePlantAsync(admin, "P1");
 
         Assert.Equal(HttpStatusCode.Created, (await MaterialCostAsync(admin, cement, 12m, "2026-01-01")).StatusCode);
         var duplicate = await MaterialCostAsync(admin, cement, 13m, "2026-01-01");
@@ -246,7 +216,7 @@ public class CostingTests(ApiFactory factory)
     public async Task Cost_rows_can_be_corrected_and_removed()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
-        var cement = await MaterialAsync(admin, "CEM", "Cement", "Kg");
+        var cement = await CreateMaterialAsync(admin, "CEM", "Cement", "Kg");
 
         var first = await MaterialCostAsync(admin, cement, 12m, "2026-01-01");
         var second = await MaterialCostAsync(admin, cement, 14m, "2026-06-01");
@@ -330,7 +300,7 @@ public class CostingTests(ApiFactory factory)
         var a = await factory.CreateCompanyAsync();
         var b = await factory.CreateCompanyAsync();
         var setup = await SimpleSetupAsync(a.Admin.Client);
-        var plantId = await PlantAsync(a.Admin.Client, "P1");
+        var plantId = await CreatePlantAsync(a.Admin.Client, "P1");
         await MaterialCostAsync(a.Admin.Client, setup.Cement, 12m, "2026-01-01");
         await OverheadAsync(a.Admin.Client, "Overhead", 8m);
 

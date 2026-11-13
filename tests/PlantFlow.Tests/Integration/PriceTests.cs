@@ -5,35 +5,13 @@ using PlantFlow.Api.Domain.Pricing;
 using PlantFlow.Api.Domain.Security;
 using PlantFlow.Api.Infrastructure;
 using PlantFlow.Api.Services;
+using static PlantFlow.Tests.Integration.TestData;
 
 namespace PlantFlow.Tests.Integration;
 
 [Collection("api")]
 public class PriceTests(ApiFactory factory)
 {
-    private static async Task<Guid> ProductAsync(HttpClient client, string code = "G4000", string status = "Active")
-    {
-        var response = await client.PostAsJsonAsync("/api/products",
-            new { code, name = code, strengthClass = "4000 psi", maxAggregateMm = 20, defaultSlumpMm = 100, status });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<ProductDto>(ApiFactory.Json))!.Id;
-    }
-
-    private static async Task<Guid> PlantAsync(HttpClient client, string code)
-    {
-        var response = await client.PostAsJsonAsync("/api/plants",
-            new { code, name = $"Plant {code}", timeZone = "Asia/Dhaka", operatingHoursPerDay = 10 });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<PlantDetailDto>(ApiFactory.Json))!.Plant.Id;
-    }
-
-    private static async Task<Guid> CustomerAsync(HttpClient client, string code)
-    {
-        var response = await client.PostAsJsonAsync("/api/customers",
-            new { code, name = $"Customer {code}", type = "Contractor", phone = "01700000000" });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<CustomerDto>(ApiFactory.Json))!.Id;
-    }
 
     private static Task<HttpResponseMessage> PostPriceAsync(
         HttpClient client, Guid productId, decimal price, string from = "2026-01-01", string? to = "2026-12-31",
@@ -59,15 +37,6 @@ public class PriceTests(ApiFactory factory)
         (await ActAsync(client, id, "approve")).EnsureSuccessStatusCode();
     }
 
-    private static async Task<PriceDto> ActivePriceAsync(
-        HttpClient client, Guid productId, decimal price, string from = "2026-01-01", string? to = "2026-12-31",
-        Guid? plantId = null, Guid? customerId = null)
-    {
-        var created = await CreatePriceAsync(client, productId, price, from, to, plantId, customerId);
-        await ActivateAsync(client, created.Id);
-        return created;
-    }
-
     private static Task<PriceDto?> GetPriceAsync(HttpClient client, Guid id) =>
         client.GetFromJsonAsync<PriceDto>($"/api/prices/{id}", ApiFactory.Json);
 
@@ -88,7 +57,7 @@ public class PriceTests(ApiFactory factory)
     public async Task A_price_goes_from_draft_to_active_and_can_be_rejected_first()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
-        var productId = await ProductAsync(admin);
+        var productId = await CreateProductAsync(admin);
 
         var draft = await CreatePriceAsync(admin, productId, 520m);
         Assert.Equal(PriceStatus.Draft, draft.Status);
@@ -118,7 +87,7 @@ public class PriceTests(ApiFactory factory)
     public async Task Only_a_draft_can_be_edited()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
-        var productId = await ProductAsync(admin);
+        var productId = await CreateProductAsync(admin);
         var draft = await CreatePriceAsync(admin, productId, 520m);
 
         var edit = new { productId, pricePerCft = 530.5m, validFrom = "2026-02-01", validTo = "2026-11-30" };
@@ -141,11 +110,11 @@ public class PriceTests(ApiFactory factory)
     public async Task Overlapping_active_prices_in_the_same_scope_are_refused_at_approval()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
-        var productId = await ProductAsync(admin);
-        var plantId = await PlantAsync(admin, "P1");
-        var customerId = await CustomerAsync(admin, "C1");
+        var productId = await CreateProductAsync(admin);
+        var plantId = await CreatePlantAsync(admin, "P1");
+        var customerId = await CreateCustomerAsync(admin, "C1");
 
-        await ActivePriceAsync(admin, productId, 500m, "2026-01-01", "2026-06-30");
+        await CreateActivePriceAsync(admin, productId, 500m, "2026-01-01", "2026-06-30");
 
         // One day of overlap is refused. The refused price stays waiting for approval.
         var overlapping = await CreatePriceAsync(admin, productId, 510m, "2026-06-30", "2026-12-31");
@@ -155,7 +124,7 @@ public class PriceTests(ApiFactory factory)
         Assert.Equal(PriceStatus.PendingApproval, (await GetPriceAsync(admin, overlapping.Id))!.Status);
 
         // The day after the first one ends is fine.
-        var adjacent = await ActivePriceAsync(admin, productId, 510m, "2026-07-01", "2026-12-31");
+        var adjacent = await CreateActivePriceAsync(admin, productId, 510m, "2026-07-01", "2026-12-31");
 
         // An open-ended price overlaps everything that starts later.
         var openEnded = await CreatePriceAsync(admin, productId, 520m, "2026-12-01", null);
@@ -163,8 +132,8 @@ public class PriceTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.Conflict, (await ActAsync(admin, openEnded.Id, "approve")).StatusCode);
 
         // Other scopes (a plant, a customer) never clash with the general price.
-        await ActivePriceAsync(admin, productId, 530m, "2026-01-01", "2026-12-31", plantId: plantId);
-        await ActivePriceAsync(admin, productId, 540m, "2026-01-01", "2026-12-31", customerId: customerId);
+        await CreateActivePriceAsync(admin, productId, 530m, "2026-01-01", "2026-12-31", plantId: plantId);
+        await CreateActivePriceAsync(admin, productId, 540m, "2026-01-01", "2026-12-31", customerId: customerId);
 
         // Expiring the blocking price frees the period.
         Assert.Equal(HttpStatusCode.NoContent, (await ActAsync(admin, adjacent.Id, "expire")).StatusCode);
@@ -175,15 +144,15 @@ public class PriceTests(ApiFactory factory)
     public async Task The_lookup_picks_the_most_specific_active_price()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
-        var productId = await ProductAsync(admin);
-        var p1 = await PlantAsync(admin, "P1");
-        var p2 = await PlantAsync(admin, "P2");
-        var customerId = await CustomerAsync(admin, "C1");
+        var productId = await CreateProductAsync(admin);
+        var p1 = await CreatePlantAsync(admin, "P1");
+        var p2 = await CreatePlantAsync(admin, "P2");
+        var customerId = await CreateCustomerAsync(admin, "C1");
 
-        await ActivePriceAsync(admin, productId, 100m);
-        await ActivePriceAsync(admin, productId, 110m, plantId: p1);
-        await ActivePriceAsync(admin, productId, 120m, customerId: customerId);
-        await ActivePriceAsync(admin, productId, 130m, plantId: p1, customerId: customerId);
+        await CreateActivePriceAsync(admin, productId, 100m);
+        await CreateActivePriceAsync(admin, productId, 110m, plantId: p1);
+        await CreateActivePriceAsync(admin, productId, 120m, customerId: customerId);
+        await CreateActivePriceAsync(admin, productId, 130m, plantId: p1, customerId: customerId);
 
         var customerAtP1 = await MatchAsync(admin, productId, p1, customerId: customerId);
         var customerAtP2 = await MatchAsync(admin, productId, p2, customerId: customerId);
@@ -204,8 +173,8 @@ public class PriceTests(ApiFactory factory)
     public async Task The_lookup_ignores_drafts_pending_and_expired_prices()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
-        var productId = await ProductAsync(admin);
-        var plantId = await PlantAsync(admin, "P1");
+        var productId = await CreateProductAsync(admin);
+        var plantId = await CreatePlantAsync(admin, "P1");
 
         var draft = await CreatePriceAsync(admin, productId, 100m);
         Assert.Equal(HttpStatusCode.NotFound, (await LookupAsync(admin, productId, plantId)).StatusCode);
@@ -226,10 +195,10 @@ public class PriceTests(ApiFactory factory)
         var company = await factory.CreateCompanyAsync();
         var other = await factory.CreateCompanyAsync();
         var admin = company.Admin.Client;
-        var productId = await ProductAsync(admin);
-        var inactiveProduct = await ProductAsync(admin, "OLD", "Inactive");
-        var foreignPlant = await PlantAsync(other.Admin.Client, "PX");
-        var foreignCustomer = await CustomerAsync(other.Admin.Client, "CX");
+        var productId = await CreateProductAsync(admin);
+        var inactiveProduct = await CreateProductAsync(admin, "OLD", "Inactive");
+        var foreignPlant = await CreatePlantAsync(other.Admin.Client, "PX");
+        var foreignCustomer = await CreateCustomerAsync(other.Admin.Client, "CX");
 
         var endsBeforeStart = await PostPriceAsync(admin, productId, 500m, "2026-06-01", "2026-05-01");
         var zeroPrice = await PostPriceAsync(admin, productId, 0m);
@@ -249,7 +218,7 @@ public class PriceTests(ApiFactory factory)
     public async Task Status_changes_only_follow_the_allowed_order()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
-        var productId = await ProductAsync(admin);
+        var productId = await CreateProductAsync(admin);
         var price = await CreatePriceAsync(admin, productId, 500m);
 
         var approveDraft = await ActAsync(admin, price.Id, "approve");
@@ -271,9 +240,9 @@ public class PriceTests(ApiFactory factory)
     public async Task The_list_supports_paging_search_and_filters()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
-        var alpha = await ProductAsync(admin, "ALPHA");
-        var bravo = await ProductAsync(admin, "BRAVO");
-        var charlie = await ProductAsync(admin, "CHARLIE");
+        var alpha = await CreateProductAsync(admin, "ALPHA");
+        var bravo = await CreateProductAsync(admin, "BRAVO");
+        var charlie = await CreateProductAsync(admin, "CHARLIE");
 
         var a = await CreatePriceAsync(admin, alpha, 500m);
         await CreatePriceAsync(admin, bravo, 510m);
@@ -299,9 +268,9 @@ public class PriceTests(ApiFactory factory)
     {
         var company = await factory.CreateCompanyAsync();
         var other = await factory.CreateCompanyAsync();
-        var productId = await ProductAsync(company.Admin.Client);
-        var plantId = await PlantAsync(company.Admin.Client, "P1");
-        await ActivePriceAsync(company.Admin.Client, productId, 500m);
+        var productId = await CreateProductAsync(company.Admin.Client);
+        var plantId = await CreatePlantAsync(company.Admin.Client, "P1");
+        await CreateActivePriceAsync(company.Admin.Client, productId, 500m);
 
         var rep = await factory.AddMemberAsync(company, "Sales Representative"); // has prices.view only
 

@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using PlantFlow.Api.Controllers;
 using PlantFlow.Api.Services;
+using static PlantFlow.Tests.Integration.TestData;
 
 namespace PlantFlow.Tests.Integration;
 
@@ -11,63 +12,31 @@ public class CostMarginTests(ApiFactory factory)
 {
     private record Setup(Guid PlantId, Guid Cement);
 
-    private static async Task<Guid> ProductAsync(HttpClient client, string code, string status = "Active")
-    {
-        var response = await client.PostAsJsonAsync("/api/products",
-            new { code, name = code, strengthClass = "4000 psi", maxAggregateMm = 20, defaultSlumpMm = 100, status });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<ProductDto>(ApiFactory.Json))!.Id;
-    }
-
-    private static async Task ApprovedDesignAsync(HttpClient client, Guid productId, Guid cement)
-    {
-        var created = await client.PostAsJsonAsync("/api/mix-designs",
-            new { productId, items = new[] { new { materialId = cement, quantityPerCft = 10m } } });
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        var design = (await created.Content.ReadFromJsonAsync<MixDesignDetailDto>(ApiFactory.Json))!;
-        (await client.PostAsync($"/api/mix-designs/{design.Design.Id}/submit", null)).EnsureSuccessStatusCode();
-        (await client.PostAsync($"/api/mix-designs/{design.Design.Id}/approve", null)).EnsureSuccessStatusCode();
-    }
-
-    private static async Task ActivePriceAsync(HttpClient client, Guid productId, decimal price, Guid? customerId = null)
-    {
-        var created = await client.PostAsJsonAsync("/api/prices",
-            new { productId, customerId, pricePerCft = price, validFrom = "2026-01-01", validTo = "2026-12-31" });
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        var dto = (await created.Content.ReadFromJsonAsync<PriceDto>(ApiFactory.Json))!;
-        (await client.PostAsync($"/api/prices/{dto.Id}/submit", null)).EnsureSuccessStatusCode();
-        (await client.PostAsync($"/api/prices/{dto.Id}/approve", null)).EnsureSuccessStatusCode();
-    }
-
     // Cement costs 8 per kg and the recipe uses 10 kg per CFT: material cost 80. Overhead 10. Total cost 90.
     // With the default 10% margin the floor price is 90 / 0.9 = 100.
     private static async Task<Setup> SetupAsync(HttpClient admin)
     {
-        var cementResponse = await admin.PostAsJsonAsync("/api/materials",
-            new { code = "CEM", name = "Cement", category = "Cement", unit = "Kg", status = "Active" });
-        var cement = (await cementResponse.Content.ReadFromJsonAsync<MaterialDto>(ApiFactory.Json))!.Id;
-
-        var plantResponse = await admin.PostAsJsonAsync("/api/plants",
-            new { code = "P1", name = "Plant 1", timeZone = "Asia/Dhaka", operatingHoursPerDay = 10 });
-        var plantId = (await plantResponse.Content.ReadFromJsonAsync<PlantDetailDto>(ApiFactory.Json))!.Plant.Id;
+        var cement = await CreateMaterialAsync(admin, "CEM", "Cement", "Kg");
+        var plantId = await CreatePlantAsync(admin, "P1");
 
         (await admin.PostAsJsonAsync("/api/material-costs",
             new { materialId = cement, costPerUnit = 8m, effectiveFrom = "2026-01-01" })).EnsureSuccessStatusCode();
         (await admin.PostAsJsonAsync("/api/overhead-costs",
             new { kind = "Overhead", name = "Labour", amountPerCft = 10m, validFrom = "2026-01-01" })).EnsureSuccessStatusCode();
 
-        var alpha = await ProductAsync(admin, "ALPHA");
-        var bravo = await ProductAsync(admin, "BRAVO");
-        var charlie = await ProductAsync(admin, "CHARLIE");
-        await ProductAsync(admin, "DELTA");                      // no recipe at all
-        await ProductAsync(admin, "ECHO", "Inactive");           // inactive products are left out
+        var items = new[] { new { materialId = cement, quantityPerCft = 10m } };
+        var alpha = await CreateProductAsync(admin, "ALPHA");
+        var bravo = await CreateProductAsync(admin, "BRAVO");
+        var charlie = await CreateProductAsync(admin, "CHARLIE");
+        await CreateProductAsync(admin, "DELTA");                    // no recipe at all
+        await CreateProductAsync(admin, "ECHO", "Inactive");         // inactive products are left out
 
-        await ApprovedDesignAsync(admin, alpha, cement);
-        await ApprovedDesignAsync(admin, bravo, cement);
-        await ApprovedDesignAsync(admin, charlie, cement);
+        await CreateApprovedDesignAsync(admin, alpha, items);
+        await CreateApprovedDesignAsync(admin, bravo, items);
+        await CreateApprovedDesignAsync(admin, charlie, items);
 
-        await ActivePriceAsync(admin, alpha, 120m);
-        await ActivePriceAsync(admin, bravo, 95m);               // below the floor of 100
+        await CreateActivePriceAsync(admin, alpha, 120m);
+        await CreateActivePriceAsync(admin, bravo, 95m);             // below the floor of 100
         return new Setup(plantId, cement);
     }
 
@@ -135,14 +104,11 @@ public class CostMarginTests(ApiFactory factory)
             aitRates = new[] { new { customerType = "Contractor", percent = 10m } }
         })).EnsureSuccessStatusCode();
 
-        var customerResponse = await admin.PostAsJsonAsync("/api/customers",
-            new { code = "C1", name = "Test Customer", type = "Contractor", phone = "01700000000" });
-        var customer = (await customerResponse.Content.ReadFromJsonAsync<CustomerDto>(ApiFactory.Json))!;
-
+        var customerId = await CreateCustomerAsync(admin, "C1");
         var alphaId = (await ReportAsync(admin, setup.PlantId)).First(r => r.ProductCode == "ALPHA").ProductId;
-        await ActivePriceAsync(admin, alphaId, 125m, customer.Id);
+        await CreateActivePriceAsync(admin, alphaId, 125m, customerId: customerId);
 
-        var alpha = (await ReportAsync(admin, setup.PlantId, customerId: customer.Id)).First(r => r.ProductCode == "ALPHA");
+        var alpha = (await ReportAsync(admin, setup.PlantId, customerId: customerId)).First(r => r.ProductCode == "ALPHA");
 
         // Margin 10% and AIT 10% leave 80% of the price: floor = 90 / 0.8 = 112.5.
         Assert.Equal(112.5m, alpha.FloorPrice);
@@ -182,9 +148,7 @@ public class CostMarginTests(ApiFactory factory)
         var company = await factory.CreateCompanyAsync();
         var other = await factory.CreateCompanyAsync();
         var setup = await SetupAsync(company.Admin.Client);
-        var foreignPlant = (await (await other.Admin.Client.PostAsJsonAsync("/api/plants",
-            new { code = "PX", name = "Other", timeZone = "Asia/Dhaka", operatingHoursPerDay = 10 }))
-            .Content.ReadFromJsonAsync<PlantDetailDto>(ApiFactory.Json))!.Plant.Id;
+        var foreignPlant = await CreatePlantAsync(other.Admin.Client, "PX");
 
         var rep = await factory.AddMemberAsync(company, "Sales Representative"); // no costs.manage
         var asRep = await rep.Client.GetAsync($"/api/cost-margin?plantId={setup.PlantId}");
