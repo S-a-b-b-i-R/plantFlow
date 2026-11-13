@@ -306,7 +306,7 @@ public class OrdersController(
         }
 
         order.Status = OrderStatus.Submitted;
-        order.History.Add(HistoryEntry(order, OrderStatus.Draft, OrderStatus.Submitted, null));
+        db.OrderStatusHistories.Add(HistoryEntry(order, OrderStatus.Draft, OrderStatus.Submitted, null));
 
         audit.Record(order.TenantId, "order.submitted", "Order", order.Id.ToString(),
             new { order.Number, BelowFloorLines = order.Lines.Count(l => l.UnitPrice < l.FloorPrice) });
@@ -330,7 +330,7 @@ public class OrdersController(
         var from = order.Status;
         order.Status = OrderStatus.Cancelled;
         order.CancelReason = request.Reason.Trim();
-        order.History.Add(HistoryEntry(order, from, OrderStatus.Cancelled, order.CancelReason));
+        db.OrderStatusHistories.Add(HistoryEntry(order, from, OrderStatus.Cancelled, order.CancelReason));
 
         audit.Record(order.TenantId, "order.cancelled", "Order", order.Id.ToString(),
             new { order.Number, From = from.ToString(), order.CancelReason });
@@ -457,6 +457,7 @@ public class OrdersController(
     private OrderStatusHistory HistoryEntry(Order order, OrderStatus? from, OrderStatus to, string? reason) => new()
     {
         TenantId = order.TenantId == Guid.Empty ? currentUser.TenantId!.Value : order.TenantId,
+        OrderId = order.Id,
         FromStatus = from,
         ToStatus = to,
         ChangedBy = currentUser.UserId,

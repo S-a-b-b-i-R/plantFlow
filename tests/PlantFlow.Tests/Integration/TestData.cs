@@ -66,4 +66,11 @@ public static class TestData
         (await client.PostAsync($"/api/prices/{dto.Id}/approve", null)).EnsureSuccessStatusCode();
         return dto;
     }
+
+    public static async Task<Guid> CreateSiteAsync(HttpClient client, Guid customerId, string name = "Site 1")
+    {
+        var response = await client.PostAsJsonAsync($"/api/customers/{customerId}/sites", new { name });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<SiteDto>(ApiFactory.Json))!.Id;
+    }
 }
