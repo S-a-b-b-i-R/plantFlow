@@ -4,37 +4,13 @@ using PlantFlow.Api.Controllers;
 using PlantFlow.Api.Domain.MixDesigns;
 using PlantFlow.Api.Domain.Security;
 using PlantFlow.Api.Infrastructure;
-
+using static PlantFlow.Tests.Integration.TestData;
 namespace PlantFlow.Tests.Integration;
 
 [Collection("api")]
 public class MixDesignTests(ApiFactory factory)
 {
     private record Catalog(Guid ProductId, Guid Cement, Guid Sand, Guid Stone, Guid Water);
-
-    private static async Task<Guid> CreateMaterialAsync(
-        HttpClient client, string code, string category, string unit, string status = "Active")
-    {
-        var response = await client.PostAsJsonAsync("/api/materials", new { code, name = code, category, unit, status });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<MaterialDto>(ApiFactory.Json))!.Id;
-    }
-
-    private static async Task<Guid> CreateProductAsync(HttpClient client, string code, string status = "Active")
-    {
-        var response = await client.PostAsJsonAsync("/api/products",
-            new { code, name = code, strengthClass = "4000 psi", maxAggregateMm = 20, defaultSlumpMm = 100, status });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<ProductDto>(ApiFactory.Json))!.Id;
-    }
-
-    private static async Task<Guid> CreatePlantAsync(HttpClient client, string code)
-    {
-        var response = await client.PostAsJsonAsync("/api/plants",
-            new { code, name = $"Plant {code}", timeZone = "Asia/Dhaka", operatingHoursPerDay = 10 });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<PlantDetailDto>(ApiFactory.Json))!.Plant.Id;
-    }
 
     private static async Task<Catalog> CreateCatalogAsync(HttpClient client, string productCode = "G4000-20") => new(
         await CreateProductAsync(client, productCode),
