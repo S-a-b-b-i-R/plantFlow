@@ -24,7 +24,12 @@ public record OrderLineDto(
 
 public record OrderHistoryDto(OrderStatus? FromStatus, OrderStatus ToStatus, DateTime ChangedAtUtc, Guid? ChangedBy, string? Reason);
 
-public record OrderDetailDto(OrderSummaryDto Order, List<OrderLineDto> Lines, List<OrderHistoryDto> History);
+public record OrderApprovalDto(
+    ApprovalStage Stage, ApprovalDecision Decision, int Round, DateTime OpenedAtUtc,
+    Guid? DecidedBy, DateTime? DecidedAtUtc, string? Comment);
+
+public record OrderDetailDto(
+    OrderSummaryDto Order, List<OrderLineDto> Lines, List<OrderHistoryDto> History, List<OrderApprovalDto> Approvals);
 
 public class OrderLineRequest
 {
@@ -88,6 +93,16 @@ public class OrderRequest
     public List<OrderLineRequest> Lines { get; init; } = [];
 }
 
+public class ReviseOrderRequest
+{
+    [Required, StringLength(500, MinimumLength = 3)]
+    public string Reason { get; init; } = "";
+
+    // The whole order as it should be, in the same shape as an update.
+    [Required]
+    public OrderRequest Order { get; init; } = null!;
+}
+
 public class CancelOrderRequest
 {
     [Required, StringLength(500, MinimumLength = 3)]
@@ -98,7 +113,7 @@ public class CancelOrderRequest
 [Route("api/orders")]
 public class OrdersController(
     PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit,
-    FloorPriceCalculator calculator, PriceFinder finder) : ControllerBase
+    FloorPriceCalculator calculator, PriceFinder finder, OrderApprovalFlow flow) : ControllerBase
 {
     private static readonly Expression<Func<Order, OrderSummaryDto>> ToSummary = o => new OrderSummaryDto(
         o.Id, o.Number, o.CustomerId, o.Customer.Name, o.SiteId, o.Site.Name,
@@ -114,13 +129,15 @@ public class OrdersController(
         l.SlumpMm, l.PourElement, l.PourMethod, l.Notes, l.QuantityCft * l.UnitPrice);
 
     // ?search= matches number, customer or site.  ?status= ?customerId= ?siteId= ?plantId= ?salesRepId=
-    // ?requestedFrom= ?requestedTo= (dates).  ?sort=date|-date. The default is newest first.
+    // ?requestedFrom= ?requestedTo= (dates).  ?awaitingStage=SalesManager|Management|Credit (an approval is waiting).
+    // ?sort=date|-date. The default is newest first.
     [HttpGet]
     [HasPermission(Permissions.OrdersView)]
     public async Task<ActionResult<PagedResult<OrderSummaryDto>>> List(
         [FromQuery] PageQuery paging, [FromQuery] OrderStatus? status, [FromQuery] Guid? customerId,
         [FromQuery] Guid? siteId, [FromQuery] Guid? plantId, [FromQuery] Guid? salesRepId,
-        [FromQuery] DateOnly? requestedFrom, [FromQuery] DateOnly? requestedTo, CancellationToken cancellationToken)
+        [FromQuery] DateOnly? requestedFrom, [FromQuery] DateOnly? requestedTo,
+        [FromQuery] ApprovalStage? awaitingStage, CancellationToken cancellationToken)
     {
         var query = db.Orders.AsNoTracking();
 
@@ -131,6 +148,12 @@ public class OrdersController(
         if (salesRepId is not null) query = query.Where(o => o.SalesRepId == salesRepId);
         if (requestedFrom is not null) query = query.Where(o => o.RequestedDate >= requestedFrom);
         if (requestedTo is not null) query = query.Where(o => o.RequestedDate <= requestedTo);
+
+        if (awaitingStage is not null)
+        {
+            query = query.Where(o => o.Approvals.Any(a =>
+                a.Round == o.ApprovalRound && a.Stage == awaitingStage && a.Decision == ApprovalDecision.Pending));
+        }
 
         if (!string.IsNullOrWhiteSpace(paging.Search))
         {
@@ -220,51 +243,41 @@ public class OrdersController(
         var (prepared, problem) = await PrepareAsync(request, order, cancellationToken);
         if (problem is not null) return problem;
 
-        order.CustomerId = request.CustomerId!.Value;
-        order.SiteId = request.SiteId!.Value;
-        order.SalesRepId = prepared!.SalesRepId;
-        order.PlantId = request.PlantId!.Value;
-        order.RequestedDate = request.RequestedDate!.Value;
-        order.DistanceKm = prepared.DistanceKm;
-        order.PaymentTerms = request.PaymentTerms?.Trim();
-        order.Notes = request.Notes?.Trim();
+        var changes = Compare(order, request, prepared!);
+        Apply(order, request, prepared!);
 
-        // Work out what to remove first, then update in place and add new lines explicitly.
-        var keptIds = request.Lines.Where(l => l.Id is not null).Select(l => l.Id!.Value).ToHashSet();
-        var removed = order.Lines.Where(l => !keptIds.Contains(l.Id)).ToList();
-        var existing = order.Lines.ToDictionary(l => l.Id);
+        audit.Record(order.TenantId, "order.updated", "Order", order.Id.ToString(), new { order.Number, changes.Log });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
 
-        for (var i = 0; i < request.Lines.Count; i++)
+    // The Sales Manager changes the BOQ while the order is waiting for approval. Every change is logged.
+    // A changed price, quantity, line, distance or date restarts the Management and Credit approvals.
+    [HttpPut("{id:guid}/revise")]
+    [HasPermission(Permissions.OrdersApproveSalesManager)]
+    public async Task<IActionResult> Revise(Guid id, ReviseOrderRequest request, CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.Include(o => o.Lines).Include(o => o.Approvals)
+            .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null) return NotFound();
+
+        if (order.Status is not (OrderStatus.Submitted or OrderStatus.InApproval))
         {
-            var r = request.Lines[i];
-            var e = prepared.Lines[i];
-
-            if (r.Id is { } lineId)
-            {
-                var line = existing[lineId];
-                line.ProductId = r.ProductId!.Value;
-                line.MixDesignId = e.MixDesignId;
-                line.QuantityCft = r.QuantityCft;
-                line.UnitPrice = e.UnitPrice;
-                line.PriceId = e.PriceId;
-                line.FloorPrice = e.FloorPrice;
-                line.SlumpMm = e.SlumpMm;
-                line.PourElement = r.PourElement!.Value;
-                line.PourMethod = r.PourMethod!.Value;
-                line.Notes = r.Notes?.Trim();
-            }
-            else
-            {
-                var line = NewLine(order.TenantId, r, e);
-                line.OrderId = order.Id;
-                db.OrderLines.Add(line);
-            }
+            return Problem(title: $"Only an order waiting for approval can be revised. This order is {order.Status}.",
+                statusCode: StatusCodes.Status409Conflict);
         }
 
-        db.OrderLines.RemoveRange(removed);
+        var (prepared, problem) = await PrepareAsync(request.Order, order, cancellationToken);
+        if (problem is not null) return problem;
 
-        audit.Record(order.TenantId, "order.updated", "Order", order.Id.ToString(),
-            new { order.Number, order.DistanceKm, Lines = request.Lines.Count, Removed = removed.Count });
+        var changes = Compare(order, request.Order, prepared!);
+        var lines = Apply(order, request.Order, prepared!);
+
+        if (changes.Commercial) flow.WithdrawCommercialStages(order);
+        await flow.AdvanceAsync(order, lines, cancellationToken);
+
+        audit.Record(order.TenantId, "order.revised", "Order", order.Id.ToString(),
+            new { order.Number, Reason = request.Reason.Trim(), changes.Commercial, changes.Log });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
@@ -305,32 +318,32 @@ public class OrdersController(
                 statusCode: StatusCodes.Status409Conflict);
         }
 
-        order.Status = OrderStatus.Submitted;
-        db.OrderStatusHistories.Add(HistoryEntry(order, OrderStatus.Draft, OrderStatus.Submitted, null));
+        flow.Start(order);
 
         audit.Record(order.TenantId, "order.submitted", "Order", order.Id.ToString(),
-            new { order.Number, BelowFloorLines = order.Lines.Count(l => l.UnitPrice < l.FloorPrice) });
+            new { order.Number, order.ApprovalRound, BelowFloorLines = order.Lines.Count(OrderApprovalFlow.IsBelowFloor) });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
 
+    // Allowed until the first truck leaves. Any approval still waiting is withdrawn.
     [HttpPost("{id:guid}/cancel")]
     [HasPermission(Permissions.OrdersEdit)]
     public async Task<IActionResult> Cancel(Guid id, CancelOrderRequest request, CancellationToken cancellationToken)
     {
-        var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        var order = await db.Orders.Include(o => o.Approvals).FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order is null) return NotFound();
 
-        if (order.Status is not (OrderStatus.Draft or OrderStatus.Submitted))
+        if (order.Status is not (OrderStatus.Draft or OrderStatus.Submitted or OrderStatus.InApproval or OrderStatus.Approved))
         {
             return Problem(title: $"An order that is {order.Status} cannot be cancelled here.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
         var from = order.Status;
-        order.Status = OrderStatus.Cancelled;
         order.CancelReason = request.Reason.Trim();
-        db.OrderStatusHistories.Add(HistoryEntry(order, from, OrderStatus.Cancelled, order.CancelReason));
+        flow.WithdrawPending(order);
+        flow.ChangeStatus(order, OrderStatus.Cancelled, order.CancelReason);
 
         audit.Record(order.TenantId, "order.cancelled", "Order", order.Id.ToString(),
             new { order.Number, From = from.ToString(), order.CancelReason });
@@ -341,6 +354,8 @@ public class OrdersController(
     private record LineEval(decimal UnitPrice, Guid? PriceId, decimal? FloorPrice, Guid? MixDesignId, int SlumpMm);
 
     private record Prepared(Guid? SalesRepId, decimal DistanceKm, List<LineEval> Lines);
+
+    private sealed record Changes(bool Commercial, object Log);
 
     // Checks the request and works out the distance, unit prices and floor prices. Nothing is saved here.
     // Customers, sites, plants, reps and products are only checked for being active when they changed.
@@ -439,6 +454,107 @@ public class OrdersController(
         return (new Prepared(request.SalesRepId ?? customer.SalesRepId, distance.Value, evaluated), null);
     }
 
+    // What would change, and whether it is a commercial change (price, quantity, lines, distance, date, plant, customer).
+    // Call this before Apply.
+    private static Changes Compare(Order order, OrderRequest request, Prepared prepared)
+    {
+        var existing = order.Lines.ToDictionary(l => l.Id);
+        var keptIds = request.Lines.Where(l => l.Id is not null).Select(l => l.Id!.Value).ToHashSet();
+        var lines = new List<object>();
+
+        var commercial = order.CustomerId != request.CustomerId || order.PlantId != request.PlantId
+                         || order.RequestedDate != request.RequestedDate || order.DistanceKm != prepared.DistanceKm;
+
+        for (var i = 0; i < request.Lines.Count; i++)
+        {
+            var r = request.Lines[i];
+            var e = prepared.Lines[i];
+
+            if (r.Id is { } lineId)
+            {
+                var old = existing[lineId];
+                if (old.ProductId != r.ProductId || old.QuantityCft != r.QuantityCft || old.UnitPrice != e.UnitPrice)
+                {
+                    commercial = true;
+                    lines.Add(new
+                    {
+                        Line = lineId,
+                        Before = new { old.ProductId, old.QuantityCft, old.UnitPrice },
+                        After = new { r.ProductId, r.QuantityCft, e.UnitPrice }
+                    });
+                }
+            }
+            else
+            {
+                commercial = true;
+                lines.Add(new { Added = new { r.ProductId, r.QuantityCft, e.UnitPrice } });
+            }
+        }
+
+        foreach (var removed in order.Lines.Where(l => !keptIds.Contains(l.Id)))
+        {
+            commercial = true;
+            lines.Add(new { Removed = new { removed.ProductId, removed.QuantityCft, removed.UnitPrice } });
+        }
+
+        return new Changes(commercial, new
+        {
+            Before = new { order.DistanceKm, order.RequestedDate, order.PlantId },
+            After = new { prepared.DistanceKm, request.RequestedDate, request.PlantId },
+            Lines = lines
+        });
+    }
+
+    // Updates the header and lines in place, adds new lines through the DbSet, and returns the final set of lines.
+    private List<OrderLine> Apply(Order order, OrderRequest request, Prepared prepared)
+    {
+        order.CustomerId = request.CustomerId!.Value;
+        order.SiteId = request.SiteId!.Value;
+        order.SalesRepId = prepared.SalesRepId;
+        order.PlantId = request.PlantId!.Value;
+        order.RequestedDate = request.RequestedDate!.Value;
+        order.DistanceKm = prepared.DistanceKm;
+        order.PaymentTerms = request.PaymentTerms?.Trim();
+        order.Notes = request.Notes?.Trim();
+
+        var keptIds = request.Lines.Where(l => l.Id is not null).Select(l => l.Id!.Value).ToHashSet();
+        var removed = order.Lines.Where(l => !keptIds.Contains(l.Id)).ToList();
+        var existing = order.Lines.ToDictionary(l => l.Id);
+        var final = new List<OrderLine>();
+
+        for (var i = 0; i < request.Lines.Count; i++)
+        {
+            var r = request.Lines[i];
+            var e = prepared.Lines[i];
+
+            if (r.Id is { } lineId)
+            {
+                var line = existing[lineId];
+                line.ProductId = r.ProductId!.Value;
+                line.MixDesignId = e.MixDesignId;
+                line.QuantityCft = r.QuantityCft;
+                line.UnitPrice = e.UnitPrice;
+                line.PriceId = e.PriceId;
+                line.FloorPrice = e.FloorPrice;
+                line.SlumpMm = e.SlumpMm;
+                line.PourElement = r.PourElement!.Value;
+                line.PourMethod = r.PourMethod!.Value;
+                line.Notes = r.Notes?.Trim();
+                final.Add(line);
+            }
+            else
+            {
+                var line = NewLine(order.TenantId, r, e);
+                line.OrderId = order.Id;
+                db.OrderLines.Add(line);
+                final.Add(line);
+            }
+        }
+
+        db.OrderLines.RemoveRange(removed);
+        return final;
+    }
+
     private static OrderLine NewLine(Guid tenantId, OrderLineRequest r, LineEval e) => new()
     {
         TenantId = tenantId,
@@ -454,9 +570,10 @@ public class OrdersController(
         Notes = r.Notes?.Trim()
     };
 
+    // Only for a brand-new order, which is added to the context as a whole.
     private OrderStatusHistory HistoryEntry(Order order, OrderStatus? from, OrderStatus to, string? reason) => new()
     {
-        TenantId = order.TenantId == Guid.Empty ? currentUser.TenantId!.Value : order.TenantId,
+        TenantId = order.TenantId,
         OrderId = order.Id,
         FromStatus = from,
         ToStatus = to,
@@ -478,6 +595,11 @@ public class OrdersController(
             .Select(h => new OrderHistoryDto(h.FromStatus, h.ToStatus, h.ChangedAtUtc, h.ChangedBy, h.Reason))
             .ToListAsync(cancellationToken);
 
-        return new OrderDetailDto(summary, lines, history);
+        var approvals = await db.OrderApprovals.AsNoTracking().Where(a => a.OrderId == id)
+            .OrderBy(a => a.Round).ThenBy(a => a.OpenedAtUtc)
+            .Select(a => new OrderApprovalDto(a.Stage, a.Decision, a.Round, a.OpenedAtUtc, a.DecidedBy, a.DecidedAtUtc, a.Comment))
+            .ToListAsync(cancellationToken);
+
+        return new OrderDetailDto(summary, lines, history, approvals);
     }
 }

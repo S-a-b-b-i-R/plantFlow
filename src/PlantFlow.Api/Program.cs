@@ -26,6 +26,7 @@ builder.Services.AddScoped<RoleSeeder>();
 builder.Services.AddScoped<AuditWriter>();
 builder.Services.AddScoped<FloorPriceCalculator>();
 builder.Services.AddScoped<PriceFinder>();
+builder.Services.AddScoped<OrderApprovalFlow>();
 builder.Services.AddDbContext<PlantFlowDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddHealthChecks().AddDbContextCheck<PlantFlowDbContext>("database");

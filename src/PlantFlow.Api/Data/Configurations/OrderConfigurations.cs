@@ -78,3 +78,18 @@ public class OrderStatusHistoryConfiguration : IEntityTypeConfiguration<OrderSta
         builder.HasOne<Tenant>().WithMany().HasForeignKey(h => h.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class OrderApprovalConfiguration : IEntityTypeConfiguration<OrderApproval>
+{
+    public void Configure(EntityTypeBuilder<OrderApproval> builder)
+    {
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.Stage).HasConversion<string>().HasMaxLength(20);
+        builder.Property(a => a.Decision).HasConversion<string>().HasMaxLength(20);
+        builder.Property(a => a.Comment).HasMaxLength(500);
+        builder.HasIndex(a => new { a.OrderId, a.Round });
+
+        builder.HasOne(a => a.Order).WithMany(o => o.Approvals).HasForeignKey(a => a.OrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(a => a.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}

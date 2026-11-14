@@ -11,7 +11,8 @@ namespace PlantFlow.Api.Controllers;
 
 public record TenantSettingsDto(
     string Name, string Slug, VolumeUnit VolumeUnit, decimal? PumpFreeAboveCft,
-    SurveyRequirement RequireSurveyBeforePlanning, decimal MinMarginPercent, int PumpRestShifts);
+    SurveyRequirement RequireSurveyBeforePlanning, decimal MinMarginPercent, int PumpRestShifts,
+    bool RequireCreditApproval);
 
 // What every signed-in user needs to display things. Nothing commercial.
 public record PublicSettingsDto(string Name, VolumeUnit VolumeUnit);
@@ -38,6 +39,9 @@ public class TenantSettingsRequest
     // Pumps rest for this many following shifts of the same day. 0 turns the rule off.
     [Range(0, 3)]
     public int PumpRestShifts { get; init; } = 1;
+
+    // When on, every order also needs a Credit approval.
+    public bool RequireCreditApproval { get; init; }
 }
 
 [ApiController]
@@ -45,7 +49,7 @@ public class TenantSettingsRequest
 public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
     private static TenantSettingsDto ToDto(Tenant t) => new(
-        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.MinMarginPercent, t.PumpRestShifts);
+        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.MinMarginPercent, t.PumpRestShifts, t.RequireCreditApproval);
 
     [HttpGet]
     [HasPermission(Permissions.SettingsManage)]
@@ -89,6 +93,7 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
         tenant.RequireSurveyBeforePlanning = request.RequireSurveyBeforePlanning!.Value;
         tenant.MinMarginPercent = request.MinMarginPercent;
         tenant.PumpRestShifts = request.PumpRestShifts;
+        tenant.RequireCreditApproval = request.RequireCreditApproval;
 
         audit.Record(tenant.Id, "tenant.settings_changed", "Tenant", tenant.Id.ToString(),
             new { Before = before, After = ToDto(tenant) });

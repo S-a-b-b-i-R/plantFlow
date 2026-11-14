@@ -22,4 +22,6 @@ public class Tenant : AuditableEntity
     public decimal MinMarginPercent { get; set; }
     // Pumps rest for this many following shifts of the same day after use. 0 turns the rule off.
     public int PumpRestShifts { get; set; } = 1;
+    // When on, every order also needs a Credit approval.
+    public bool RequireCreditApproval { get; set; }
 }

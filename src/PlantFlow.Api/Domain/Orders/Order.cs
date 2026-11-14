@@ -45,6 +45,11 @@ public class Order : AuditableEntity, ITenantOwned
     public string? Notes { get; set; }
     public string? CancelReason { get; set; }
 
+    // Counts up each time the order is submitted. Approvals belong to one round.
+    public int ApprovalRound { get; set; }
+
+    public List<OrderApproval> Approvals { get; set; } = [];
+
     public List<OrderLine> Lines { get; set; } = [];
     public List<OrderStatusHistory> History { get; set; } = [];
 }
