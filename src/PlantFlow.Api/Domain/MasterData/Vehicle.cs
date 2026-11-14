@@ -28,4 +28,6 @@ public class Vehicle : AuditableEntity, ITenantOwned
     public Driver? DefaultDriver { get; set; }
 
     public VehicleStatus Status { get; set; } = VehicleStatus.Available;
+    // Minutes to assemble this pump on site. Null means the company default.
+    public int? AssemblyMinutes { get; set; }
 }

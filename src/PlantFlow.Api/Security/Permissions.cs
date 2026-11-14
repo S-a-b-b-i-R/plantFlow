@@ -47,6 +47,8 @@ public static class Permissions
     public const string BatchesManage = "batches.manage";
     public const string ReturnsManage = "returns.manage";
     public const string ReturnsQc = "returns.qc";
+    public const string DeliveriesPlanApprove = "deliveries.plan.approve";
+    public const string DeliveriesPlanOverride = "deliveries.plan.override";
 
     // Targets and dashboards
     public const string TargetsView = "targets.view";
