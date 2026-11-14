@@ -73,4 +73,39 @@ public static class TestData
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<SiteDto>(ApiFactory.Json))!.Id;
     }
+
+    public record OrderWorld(Guid ProductId, Guid PlantId, Guid CustomerId, Guid SiteId);
+
+    // Cement costs 8 per kg, 10 kg per CFT, plus overhead 10: total cost 90. Default margin 10% gives a floor of 100.
+    // The general price is 120.
+    public static async Task<OrderWorld> CreateOrderWorldAsync(HttpClient admin, string productCode = "G4000")
+    {
+        var cement = await CreateMaterialAsync(admin, "CEM", "Cement", "Kg");
+        var plantId = await CreatePlantAsync(admin, "P1");
+        var customerId = await CreateCustomerAsync(admin, "C1");
+        var siteId = await CreateSiteAsync(admin, customerId, "Tower A");
+
+        (await admin.PostAsJsonAsync("/api/material-costs",
+            new { materialId = cement, costPerUnit = 8m, effectiveFrom = "2026-01-01" })).EnsureSuccessStatusCode();
+        (await admin.PostAsJsonAsync("/api/overhead-costs",
+            new { kind = "Overhead", name = "Labour", amountPerCft = 10m, validFrom = "2026-01-01" })).EnsureSuccessStatusCode();
+
+        var productId = await CreateProductAsync(admin, productCode);
+        await CreateApprovedDesignAsync(admin, productId, new[] { new { materialId = cement, quantityPerCft = 10m } });
+        await CreateActivePriceAsync(admin, productId, 120m);
+        return new OrderWorld(productId, plantId, customerId, siteId);
+    }
+
+    public static object LineBody(Guid productId, decimal qty, decimal? unitPrice = null, string element = "Slab", string method = "Chute") =>
+        new { productId, quantityCft = qty, unitPrice, pourElement = element, pourMethod = method };
+
+    public static object OrderBody(OrderWorld w, object[] lines, decimal? distanceKm = 5m, string date = "2026-06-01") =>
+        new { customerId = w.CustomerId, siteId = w.SiteId, plantId = w.PlantId, requestedDate = date, distanceKm, lines };
+
+    public static async Task<OrderDetailDto> CreateDraftAsync(HttpClient client, OrderWorld w, object[] lines)
+    {
+        var response = await client.PostAsJsonAsync("/api/orders", OrderBody(w, lines));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<OrderDetailDto>(ApiFactory.Json))!;
+    }
 }
