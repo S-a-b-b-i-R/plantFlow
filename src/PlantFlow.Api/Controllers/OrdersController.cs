@@ -16,7 +16,7 @@ public record OrderSummaryDto(
     Guid? SalesRepId, string? SalesRepName, Guid PlantId, string PlantCode, DateOnly RequestedDate,
     decimal DistanceKm, OrderStatus Status, string? PaymentTerms, string? Notes, string? CancelReason,
     int LineCount, decimal TotalQuantityCft, decimal TotalValue, int BelowFloorLineCount, DateTime? ConfirmedAtUtc, Guid? ConfirmedBy, ConfirmationMethod? ConfirmationMethod,
-    string? ConfirmationReference, string? HoldReason);
+    string? ConfirmationReference, string? HoldReason, Guid? SurveyId);
 
 public record OrderLineDto(
     Guid Id, Guid ProductId, string ProductCode, string ProductName, Guid? MixDesignId,
@@ -95,6 +95,9 @@ public class OrderRequest
 
     [Required, MinLength(1)]
     public List<OrderLineRequest> Lines { get; init; } = [];
+
+    // Tag one of the customer's last three surveys. Planning then uses it. Leave it out for none.
+    public Guid? SurveyId { get; init; }
 }
 
 public class ReviseOrderRequest
@@ -125,7 +128,7 @@ public class OrdersController(
         o.DistanceKm, o.Status, o.PaymentTerms, o.Notes, o.CancelReason,
         o.Lines.Count(), o.Lines.Sum(l => l.QuantityCft), o.Lines.Sum(l => l.QuantityCft * l.UnitPrice),
         o.Lines.Count(l => l.FloorPrice != null && l.UnitPrice < l.FloorPrice),
-        o.ConfirmedAtUtc, o.ConfirmedBy, o.ConfirmationMethod, o.ConfirmationReference, o.HoldReason);
+        o.ConfirmedAtUtc, o.ConfirmedBy, o.ConfirmationMethod, o.ConfirmationReference, o.HoldReason, o.SiteSurveyId);
 
     private static readonly Expression<Func<OrderLine, OrderLineDto>> ToLine = l => new OrderLineDto(
         l.Id, l.ProductId, l.Product.Code, l.Product.Name, l.MixDesignId,
@@ -202,6 +205,7 @@ public class OrdersController(
             Number = $"SO-{sequence:D6}",
             CustomerId = request.CustomerId!.Value,
             SiteId = request.SiteId!.Value,
+            SiteSurveyId = request.SurveyId,
             SalesRepId = prepared!.SalesRepId,
             PlantId = request.PlantId!.Value,
             RequestedDate = request.RequestedDate!.Value,
@@ -433,6 +437,17 @@ public class OrdersController(
             return (null, Bad("Choose an active site that belongs to this customer."));
         }
 
+        if (request.SurveyId is { } surveyId && surveyId != existing?.SiteSurveyId)
+        {
+            var lastThree = await db.SiteSurveys.AsNoTracking().Where(s => s.Site.CustomerId == request.CustomerId)
+                .OrderByDescending(s => s.SurveyedOn).ThenByDescending(s => s.CreatedAtUtc)
+                .Take(3).Select(s => s.Id).ToListAsync(cancellationToken);
+            if (!lastThree.Contains(surveyId))
+            {
+                return (null, Bad("Tag one of this customer's last three surveys."));
+            }
+        }
+
         var plantStatus = await db.Plants.AsNoTracking().Where(p => p.Id == request.PlantId)
             .Select(p => (ActiveStatus?)p.Status).FirstOrDefaultAsync(cancellationToken);
         if (plantStatus is null || (existing?.PlantId != request.PlantId && plantStatus != ActiveStatus.Active))
@@ -564,6 +579,7 @@ public class OrdersController(
     {
         order.CustomerId = request.CustomerId!.Value;
         order.SiteId = request.SiteId!.Value;
+        order.SiteSurveyId = request.SurveyId;
         order.SalesRepId = prepared.SalesRepId;
         order.PlantId = request.PlantId!.Value;
         order.RequestedDate = request.RequestedDate!.Value;

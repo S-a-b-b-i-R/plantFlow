@@ -84,6 +84,8 @@ public class Order : AuditableEntity, ITenantOwned
     // Copied at confirmation
     public bool VatExempt { get; set; }
     public bool VatOnConcrete { get; set; } = true;
+    // The survey the rep tagged: one of the customer's last three. Planning checks it instead of the site's latest.
+    public Guid? SiteSurveyId { get; set; }
 }
 
 public class OrderLine : ITenantOwned

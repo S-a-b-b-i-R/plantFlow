@@ -6,7 +6,7 @@ namespace PlantFlow.Api.Domain.Planning;
 
 public enum SurveyResult { Ok, NotOk }
 
-// A site visit that says whether concrete can be poured there.
+// A site visit that says whether concrete can be poured there, and how to get to it and set up.
 public class SiteSurvey : ITenantOwned
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
@@ -19,7 +19,39 @@ public class SiteSurvey : ITenantOwned
     public SurveyResult Result { get; set; }
     public string? Notes { get; set; }
 
+    // From the surveyor's device. Required for new surveys, empty only on surveys made before this existed.
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
+    public decimal? AccuracyMeters { get; set; }
+
+    // Delivery instructions.
+    public decimal? PipingMetres { get; set; }
+    public string? PumpPosition { get; set; }
+    public string? TruckConnectionPoint { get; set; }
+
+    // How to find the place, for example "turn left after the tall blue building".
+    public string? LocationNote { get; set; }
+
     public Guid? SurveyedBy { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    public List<SiteSurveyImage> Images { get; set; } = [];
+}
+
+// A photo of the site, kept in the database. A survey has at most three.
+public class SiteSurveyImage : ITenantOwned
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public Guid TenantId { get; set; }
+
+    public Guid SurveyId { get; set; }
+    public SiteSurvey Survey { get; set; } = null!;
+
+    public string FileName { get; set; } = "";
+    public string ContentType { get; set; } = "";
+    public int SizeBytes { get; set; }
+    public string? Caption { get; set; }
+    public byte[] Content { get; set; } = [];
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 

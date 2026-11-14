@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PlantFlow.Api.Domain.MasterData;
 using PlantFlow.Api.Domain.Planning;
 using PlantFlow.Api.Domain.Tenancy;
+using PlantFlow.Api.Domain.Orders;
 
 namespace PlantFlow.Api.Data.Configurations;
 
@@ -13,10 +14,36 @@ public class SiteSurveyConfiguration : IEntityTypeConfiguration<SiteSurvey>
         builder.HasKey(s => s.Id);
         builder.Property(s => s.Result).HasConversion<string>().HasMaxLength(10);
         builder.Property(s => s.Notes).HasMaxLength(1000);
+        builder.Property(s => s.Latitude).HasPrecision(9, 6);
+        builder.Property(s => s.Longitude).HasPrecision(9, 6);
+        builder.Property(s => s.AccuracyMeters).HasPrecision(8, 1);
+        builder.Property(s => s.PipingMetres).HasPrecision(6, 1);
+        builder.Property(s => s.PumpPosition).HasMaxLength(500);
+        builder.Property(s => s.TruckConnectionPoint).HasMaxLength(500);
+        builder.Property(s => s.LocationNote).HasMaxLength(1000);
         builder.HasIndex(s => new { s.SiteId, s.SurveyedOn });
 
         builder.HasOne(s => s.Site).WithMany().HasForeignKey(s => s.SiteId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Tenant>().WithMany().HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+
+        // An order can tag a survey.
+        builder.HasMany<Order>().WithOne().HasForeignKey(o => o.SiteSurveyId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class SiteSurveyImageConfiguration : IEntityTypeConfiguration<SiteSurveyImage>
+{
+    public void Configure(EntityTypeBuilder<SiteSurveyImage> builder)
+    {
+        builder.HasKey(i => i.Id);
+        builder.Property(i => i.FileName).HasMaxLength(200).IsRequired();
+        builder.Property(i => i.ContentType).HasMaxLength(50).IsRequired();
+        builder.Property(i => i.Caption).HasMaxLength(200);
+        builder.Property(i => i.Content).IsRequired();
+        builder.HasIndex(i => i.SurveyId);
+
+        builder.HasOne(i => i.Survey).WithMany(s => s.Images).HasForeignKey(i => i.SurveyId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(i => i.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

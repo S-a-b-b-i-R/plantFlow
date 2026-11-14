@@ -315,6 +315,7 @@ public class ShiftPlansController(
                 OrderStatus = l.Order.Status,
                 OrderPlantId = l.Order.PlantId,
                 l.Order.SiteId,
+                SurveyId = l.Order.SiteSurveyId,
                 l.Order.DistanceKm
             })
             .FirstOrDefaultAsync(cancellationToken);
@@ -381,12 +382,18 @@ public class ShiftPlansController(
                           || (settings.RequireSurveyBeforePlanning == SurveyRequirement.PumpJobs && byPump);
         if (needsSurvey)
         {
-            var latest = await db.SiteSurveys.AsNoTracking().Where(s => s.SiteId == line.SiteId)
-                .OrderByDescending(s => s.SurveyedOn).ThenByDescending(s => s.CreatedAtUtc)
+            var surveys = db.SiteSurveys.AsNoTracking();
+            surveys = line.SurveyId is { } tagged
+                ? surveys.Where(s => s.Id == tagged)
+                : surveys.Where(s => s.SiteId == line.SiteId);
+
+            var latest = await surveys.OrderByDescending(s => s.SurveyedOn).ThenByDescending(s => s.CreatedAtUtc)
                 .Select(s => (SurveyResult?)s.Result).FirstOrDefaultAsync(cancellationToken);
             if (latest != SurveyResult.Ok)
             {
-                return Clash("The site needs a survey with an OK result before this pour can be planned.");
+                return Clash(line.SurveyId is null
+                    ? "The site's latest survey needs an OK result before this pour can be planned."
+                    : "The survey tagged on this order needs an OK result before this pour can be planned.");
             }
         }
 
