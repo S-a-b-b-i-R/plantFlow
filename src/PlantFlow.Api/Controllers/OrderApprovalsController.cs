@@ -60,7 +60,7 @@ public class OrderApprovalsController(
     private async Task<IActionResult> DecideAsync(
         Guid id, ApprovalStage stage, bool approve, string? comment, CancellationToken cancellationToken)
     {
-        var order = await db.Orders.Include(o => o.Lines).Include(o => o.Approvals)
+        var order = await db.Orders.Include(o => o.Lines).Include(o => o.Approvals).Include(o => o.Charges)
             .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order is null) return NotFound();
 

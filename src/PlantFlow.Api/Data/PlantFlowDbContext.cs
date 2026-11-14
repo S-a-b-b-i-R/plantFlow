@@ -58,6 +58,7 @@ public class PlantFlowDbContext : DbContext
     public DbSet<OrderLine> OrderLines => Set<OrderLine>();
     public DbSet<OrderStatusHistory> OrderStatusHistories => Set<OrderStatusHistory>();
     public DbSet<OrderApproval> OrderApprovals => Set<OrderApproval>();
+    public DbSet<OrderCharge> OrderCharges => Set<OrderCharge>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PlantFlowDbContext).Assembly);

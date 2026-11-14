@@ -29,8 +29,11 @@ public record OrderApprovalDto(
     ApprovalStage Stage, ApprovalDecision Decision, int Round, DateTime OpenedAtUtc,
     Guid? DecidedBy, DateTime? DecidedAtUtc, string? Comment);
 
+public record OrderChargeDto(ServiceChargeKind Kind, string Description, decimal QuantityCft, decimal RatePerCft, decimal Amount);
+
 public record OrderDetailDto(
-    OrderSummaryDto Order, List<OrderLineDto> Lines, List<OrderHistoryDto> History, List<OrderApprovalDto> Approvals);
+    OrderSummaryDto Order, List<OrderLineDto> Lines, List<OrderHistoryDto> History, List<OrderApprovalDto> Approvals,
+    List<OrderChargeDto> Charges);
 
 public class OrderLineRequest
 {
@@ -114,7 +117,7 @@ public class CancelOrderRequest
 [Route("api/orders")]
 public class OrdersController(
     PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit,
-    FloorPriceCalculator calculator, PriceFinder finder, OrderApprovalFlow flow) : ControllerBase
+    FloorPriceCalculator calculator, PriceFinder finder, OrderApprovalFlow flow, OrderChargeCalculator chargeCalculator) : ControllerBase
 {
     private static readonly Expression<Func<Order, OrderSummaryDto>> ToSummary = o => new OrderSummaryDto(
         o.Id, o.Number, o.CustomerId, o.Customer.Name, o.SiteId, o.Site.Name,
@@ -290,7 +293,7 @@ public class OrdersController(
     [HasPermission(Permissions.OrdersApproveSalesManager)]
     public async Task<IActionResult> Amend(Guid id, ReviseOrderRequest request, CancellationToken cancellationToken)
     {
-        var order = await db.Orders.Include(o => o.Lines).Include(o => o.Approvals)
+        var order = await db.Orders.Include(o => o.Lines).Include(o => o.Approvals).Include(o => o.Charges)
             .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order is null) return NotFound();
 
@@ -305,6 +308,12 @@ public class OrdersController(
 
         var changes = Compare(order, request.Order, prepared!);
         var lines = Apply(order, request.Order, prepared!);
+
+        var chargeError = await chargeCalculator.ReplaceAsync(order, lines, cancellationToken);
+        if (chargeError is not null)
+        {
+            return Problem(title: chargeError, statusCode: StatusCodes.Status409Conflict);
+        }
 
         var newTotal = lines.Sum(l => l.QuantityCft * l.UnitPrice);
         var higher = newTotal > (order.ConfirmedTotal ?? 0m);
@@ -643,6 +652,10 @@ public class OrdersController(
             .Select(a => new OrderApprovalDto(a.Stage, a.Decision, a.Round, a.OpenedAtUtc, a.DecidedBy, a.DecidedAtUtc, a.Comment))
             .ToListAsync(cancellationToken);
 
-        return new OrderDetailDto(summary, lines, history, approvals);
+        var charges = await db.OrderCharges.AsNoTracking().Where(c => c.OrderId == id).OrderBy(c => c.Description)
+            .Select(c => new OrderChargeDto(c.Kind, c.Description, c.QuantityCft, c.RatePerCft, c.Amount))
+            .ToListAsync(cancellationToken);
+
+        return new OrderDetailDto(summary, lines, history, approvals, charges);
     }
 }

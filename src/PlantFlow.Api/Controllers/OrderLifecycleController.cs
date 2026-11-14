@@ -28,20 +28,26 @@ public class HoldOrderRequest
 [ApiController]
 [Route("api/orders/{id:guid}")]
 public class OrderLifecycleController(
-    PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit, OrderApprovalFlow flow) : ControllerBase
+    PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit, OrderApprovalFlow flow, OrderChargeCalculator chargeCalculator) : ControllerBase
 {
     // Records the customer's go-ahead. From here quantities and prices are locked except through an amendment.
     [HttpPost("confirm")]
     [HasPermission(Permissions.OrdersConfirm)]
     public async Task<IActionResult> Confirm(Guid id, ConfirmOrderRequest request, CancellationToken cancellationToken)
     {
-        var order = await db.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        var order = await db.Orders.Include(o => o.Lines).Include(o => o.Charges).FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order is null) return NotFound();
 
         if (order.Status != OrderStatus.Approved)
         {
             return Problem(title: $"Only an approved order can be confirmed. This order is {order.Status}.",
                 statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var chargeError = await chargeCalculator.ReplaceAsync(order, order.Lines, cancellationToken);
+        if (chargeError is not null)
+        {
+            return Problem(title: chargeError, statusCode: StatusCodes.Status409Conflict);
         }
 
         order.ConfirmedBy = currentUser.UserId;

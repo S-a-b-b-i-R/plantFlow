@@ -1377,6 +1377,54 @@ namespace PlantFlow.Api.Migrations
                     b.ToTable("OrderApprovals");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderCharge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QuantityCft")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<decimal>("RatePerCft")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<Guid?>("ServiceChargeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("ServiceChargeId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("OrderCharges");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderLine", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2044,6 +2092,28 @@ namespace PlantFlow.Api.Migrations
                     b.Navigation("Order");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderCharge", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.Orders.Order", "Order")
+                        .WithMany("Charges")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.ServiceCharge", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceChargeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderLine", b =>
                 {
                     b.HasOne("PlantFlow.Api.Domain.MixDesigns.MixDesign", "MixDesign")
@@ -2168,6 +2238,8 @@ namespace PlantFlow.Api.Migrations
             modelBuilder.Entity("PlantFlow.Api.Domain.Orders.Order", b =>
                 {
                     b.Navigation("Approvals");
+
+                    b.Navigation("Charges");
 
                     b.Navigation("History");
 

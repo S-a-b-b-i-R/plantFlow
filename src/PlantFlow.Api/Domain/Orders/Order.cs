@@ -66,6 +66,8 @@ public class Order : AuditableEntity, ITenantOwned
     public OrderStatus? HeldFromStatus { get; set; }
     public string? HoldReason { get; set; }
 
+    public List<OrderCharge> Charges { get; set; } = [];
+
     public List<OrderApproval> Approvals { get; set; } = [];
 
     public List<OrderLine> Lines { get; set; } = [];

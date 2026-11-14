@@ -98,3 +98,21 @@ public class OrderApprovalConfiguration : IEntityTypeConfiguration<OrderApproval
         builder.HasOne<Tenant>().WithMany().HasForeignKey(a => a.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class OrderChargeConfiguration : IEntityTypeConfiguration<OrderCharge>
+{
+    public void Configure(EntityTypeBuilder<OrderCharge> builder)
+    {
+        builder.HasKey(c => c.Id);
+        builder.Property(c => c.Kind).HasConversion<string>().HasMaxLength(30);
+        builder.Property(c => c.Description).HasMaxLength(200);
+        builder.Property(c => c.QuantityCft).HasPrecision(12, 2);
+        builder.Property(c => c.RatePerCft).HasPrecision(12, 2);
+        builder.Property(c => c.Amount).HasPrecision(14, 2);
+        builder.HasIndex(c => c.OrderId);
+
+        builder.HasOne(c => c.Order).WithMany(o => o.Charges).HasForeignKey(c => c.OrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ServiceCharge>().WithMany().HasForeignKey(c => c.ServiceChargeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}

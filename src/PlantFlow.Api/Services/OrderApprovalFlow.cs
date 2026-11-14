@@ -69,6 +69,7 @@ public class OrderApprovalFlow(PlantFlowDbContext db, ICurrentUser currentUser)
         row.Decision = ApprovalDecision.Rejected;
         WithdrawPending(order);
         ClearConfirmation(order);
+        db.OrderCharges.RemoveRange(order.Charges);
         ChangeStatus(order, OrderStatus.Draft, comment);
     }
 
