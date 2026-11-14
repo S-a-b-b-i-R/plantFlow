@@ -31,6 +31,11 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.PaymentTerms).HasMaxLength(100);
         builder.Property(o => o.Notes).HasMaxLength(1000);
         builder.Property(o => o.CancelReason).HasMaxLength(500);
+        builder.Property(o => o.ConfirmationMethod).HasConversion<string>().HasMaxLength(20);
+        builder.Property(o => o.ConfirmationReference).HasMaxLength(100);
+        builder.Property(o => o.ConfirmedTotal).HasPrecision(14, 2);
+        builder.Property(o => o.HeldFromStatus).HasConversion<string>().HasMaxLength(20);
+        builder.Property(o => o.HoldReason).HasMaxLength(500);
 
         builder.HasIndex(o => new { o.TenantId, o.Sequence }).IsUnique();
         builder.HasIndex(o => new { o.TenantId, o.Number }).IsUnique();
