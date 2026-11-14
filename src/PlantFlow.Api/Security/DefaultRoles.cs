@@ -55,6 +55,6 @@ public static class DefaultRoles
             TargetsView, DashboardsView
         ],
 
-        ["Management"] = [OrdersView, DeliveriesTrack, TargetsView, DashboardsView]
+        ["Management"] = [OrdersView, OrdersApproveManagement, DeliveriesTrack, TargetsView, DashboardsView]
     };
 }

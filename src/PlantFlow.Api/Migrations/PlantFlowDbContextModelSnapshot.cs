@@ -1216,6 +1216,9 @@ namespace PlantFlow.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("ApprovalRound")
+                        .HasColumnType("int");
+
                     b.Property<string>("CancelReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -1296,6 +1299,53 @@ namespace PlantFlow.Api.Migrations
                     b.HasIndex("TenantId", "Status");
 
                     b.ToTable("Orders");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderApproval", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("DecidedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("OpenedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Round")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("OrderId", "Round");
+
+                    b.ToTable("OrderApprovals");
                 });
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderLine", b =>
@@ -1500,6 +1550,9 @@ namespace PlantFlow.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(1);
+
+                    b.Property<bool>("RequireCreditApproval")
+                        .HasColumnType("bit");
 
                     b.Property<string>("RequireSurveyBeforePlanning")
                         .IsRequired()
@@ -1949,6 +2002,23 @@ namespace PlantFlow.Api.Migrations
                     b.Navigation("Site");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderApproval", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.Orders.Order", "Order")
+                        .WithMany("Approvals")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderLine", b =>
                 {
                     b.HasOne("PlantFlow.Api.Domain.MixDesigns.MixDesign", "MixDesign")
@@ -2072,6 +2142,8 @@ namespace PlantFlow.Api.Migrations
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Orders.Order", b =>
                 {
+                    b.Navigation("Approvals");
+
                     b.Navigation("History");
 
                     b.Navigation("Lines");
