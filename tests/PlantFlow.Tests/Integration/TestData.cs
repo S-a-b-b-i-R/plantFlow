@@ -121,9 +121,9 @@ public static class TestData
     }
 
     // Sets the pump rate per CFT, whether the company already has a pump charge or not.
-    public static async Task SetPumpRateAsync(HttpClient admin, decimal rate)
+    public static async Task SetPumpRateAsync(HttpClient admin, decimal rate, bool vatApplies = true)
     {
-        var body = new { code = "PUMP", name = "Pump charge", kind = "Pump", basis = "PerCft", defaultAmount = rate };
+        var body = new { code = "PUMP", name = "Pump charge", kind = "Pump", basis = "PerCft", defaultAmount = rate, vatApplies };
         var created = await admin.PostAsJsonAsync("/api/service-charges", body);
         if (created.StatusCode == HttpStatusCode.Created) return;
 
