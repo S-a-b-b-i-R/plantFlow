@@ -12,7 +12,7 @@ namespace PlantFlow.Api.Controllers;
 
 public record ServiceChargeDto(
     Guid Id, string Code, string Name, ServiceChargeKind Kind, ChargeBasis Basis,
-    decimal DefaultAmount, ActiveStatus Status);
+    decimal DefaultAmount, ActiveStatus Status, bool VatApplies);
 
 public class ServiceChargeRequest
 {
@@ -33,6 +33,8 @@ public class ServiceChargeRequest
     public decimal DefaultAmount { get; init; }
 
     public ActiveStatus Status { get; init; } = ActiveStatus.Active;
+
+    public bool VatApplies { get; init; } = true;
 }
 
 [ApiController]
@@ -40,7 +42,7 @@ public class ServiceChargeRequest
 public class ServiceChargesController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
     private static readonly Expression<Func<ServiceCharge, ServiceChargeDto>> ToDto = s =>
-        new ServiceChargeDto(s.Id, s.Code, s.Name, s.Kind, s.Basis, s.DefaultAmount, s.Status);
+        new ServiceChargeDto(s.Id, s.Code, s.Name, s.Kind, s.Basis, s.DefaultAmount, s.Status, s.VatApplies);
 
     // ?search= matches code or name.  ?kind=  ?basis=  ?status=  ?sort=code|name|amount, "-" for descending.
     [HttpGet]
@@ -100,12 +102,13 @@ public class ServiceChargesController(PlantFlowDbContext db, ICurrentUser curren
             Kind = request.Kind!.Value,
             Basis = request.Basis!.Value,
             DefaultAmount = request.DefaultAmount,
-            Status = request.Status
+            Status = request.Status,
+            VatApplies = request.VatApplies
         };
 
         db.ServiceCharges.Add(charge);
         audit.Record(tenantId, "servicecharge.created", "ServiceCharge", charge.Id.ToString(),
-            new { charge.Code, Kind = charge.Kind.ToString(), charge.DefaultAmount });
+            new { charge.Code, Kind = charge.Kind.ToString(), charge.DefaultAmount, Status = charge.Status.ToString(), VatApplies = charge.VatApplies });
         await db.SaveChangesAsync(cancellationToken);
 
         var dto = await db.ServiceCharges.AsNoTracking().Where(s => s.Id == charge.Id).Select(ToDto).FirstAsync(cancellationToken);
@@ -129,9 +132,10 @@ public class ServiceChargesController(PlantFlowDbContext db, ICurrentUser curren
         charge.Basis = request.Basis!.Value;
         charge.DefaultAmount = request.DefaultAmount;
         charge.Status = request.Status;
+        charge.VatApplies = request.VatApplies;
 
         audit.Record(charge.TenantId, "servicecharge.updated", "ServiceCharge", charge.Id.ToString(),
-            new { charge.Code, charge.DefaultAmount, Status = charge.Status.ToString() });
+            new { charge.Code, charge.DefaultAmount, Status = charge.Status.ToString(), VatApplies = charge.VatApplies });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }

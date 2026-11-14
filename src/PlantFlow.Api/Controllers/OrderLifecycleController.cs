@@ -50,6 +50,8 @@ public class OrderLifecycleController(
             return Problem(title: chargeError, statusCode: StatusCodes.Status409Conflict);
         }
 
+        await chargeCalculator.SnapshotTaxTermsAsync(order, cancellationToken);
+
         order.ConfirmedBy = currentUser.UserId;
         order.ConfirmedAtUtc = DateTime.UtcNow;
         order.ConfirmationMethod = request.Method;

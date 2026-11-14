@@ -29,7 +29,7 @@ public record OrderApprovalDto(
     ApprovalStage Stage, ApprovalDecision Decision, int Round, DateTime OpenedAtUtc,
     Guid? DecidedBy, DateTime? DecidedAtUtc, string? Comment);
 
-public record OrderChargeDto(ServiceChargeKind Kind, string Description, decimal QuantityCft, decimal RatePerCft, decimal Amount);
+public record OrderChargeDto(ServiceChargeKind Kind, string Description, decimal QuantityCft, decimal RatePerCft, decimal Amount, bool VatApplies);
 
 public record OrderDetailDto(
     OrderSummaryDto Order, List<OrderLineDto> Lines, List<OrderHistoryDto> History, List<OrderApprovalDto> Approvals,
@@ -314,6 +314,8 @@ public class OrdersController(
         {
             return Problem(title: chargeError, statusCode: StatusCodes.Status409Conflict);
         }
+
+        await chargeCalculator.SnapshotTaxTermsAsync(order, cancellationToken);
 
         var newTotal = lines.Sum(l => l.QuantityCft * l.UnitPrice);
         var higher = newTotal > (order.ConfirmedTotal ?? 0m);
@@ -653,7 +655,7 @@ public class OrdersController(
             .ToListAsync(cancellationToken);
 
         var charges = await db.OrderCharges.AsNoTracking().Where(c => c.OrderId == id).OrderBy(c => c.Description)
-            .Select(c => new OrderChargeDto(c.Kind, c.Description, c.QuantityCft, c.RatePerCft, c.Amount))
+            .Select(c => new OrderChargeDto(c.Kind, c.Description, c.QuantityCft, c.RatePerCft, c.Amount, c.VatApplies))
             .ToListAsync(cancellationToken);
 
         return new OrderDetailDto(summary, lines, history, approvals, charges);
