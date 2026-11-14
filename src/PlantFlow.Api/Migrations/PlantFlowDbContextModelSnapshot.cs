@@ -1675,6 +1675,15 @@ namespace PlantFlow.Api.Migrations
                     b.Property<DateTime>("PlannedStart")
                         .HasColumnType("datetime2(0)");
 
+                    b.Property<DateTime?>("PumpArrivedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PumpAssembledAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PumpDispatchedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid?>("PumpId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1894,6 +1903,74 @@ namespace PlantFlow.Api.Migrations
                     b.HasIndex("TenantId");
 
                     b.ToTable("SiteSurveyImages");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Planning.TruckLoad", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ArrivedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DispatchedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DispatchedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PourId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PouringEndedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PouringStartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ProducedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ProducedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QuantityCft")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("QuantityReason")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<DateTime?>("ReturnedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TruckId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PourId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TruckId");
+
+                    b.ToTable("TruckLoads");
                 });
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Pricing.Price", b =>
@@ -2684,6 +2761,31 @@ namespace PlantFlow.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Survey");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Planning.TruckLoad", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.Planning.Pour", "Pour")
+                        .WithMany()
+                        .HasForeignKey("PourId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Vehicle", "Truck")
+                        .WithMany()
+                        .HasForeignKey("TruckId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Pour");
+
+                    b.Navigation("Truck");
                 });
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Pricing.Price", b =>

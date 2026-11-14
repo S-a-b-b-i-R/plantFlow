@@ -97,3 +97,20 @@ public class PourConfiguration : IEntityTypeConfiguration<Pour>
         builder.HasOne<Tenant>().WithMany().HasForeignKey(p => p.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class TruckLoadConfiguration : IEntityTypeConfiguration<TruckLoad>
+{
+    public void Configure(EntityTypeBuilder<TruckLoad> builder)
+    {
+        builder.HasKey(l => l.Id);
+        builder.Property(l => l.QuantityCft).HasPrecision(10, 2);
+        builder.Property(l => l.QuantityReason).HasMaxLength(320);
+        builder.Property(l => l.CancelReason).HasMaxLength(300);
+        builder.HasIndex(l => l.PourId);
+        builder.HasIndex(l => l.TruckId);
+
+        builder.HasOne(l => l.Pour).WithMany().HasForeignKey(l => l.PourId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(l => l.Truck).WithMany().HasForeignKey(l => l.TruckId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(l => l.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
