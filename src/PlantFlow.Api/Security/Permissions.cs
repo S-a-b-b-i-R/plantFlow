@@ -26,7 +26,6 @@ public static class Permissions
     public const string OrdersCreate = "orders.create";
     public const string OrdersEdit = "orders.edit";
     public const string OrdersApproveSalesManager = "orders.approve.salesmanager";
-    public const string OrdersApprovePricing = "orders.approve.pricing";
     public const string OrdersApproveManagement = "orders.approve.management";
     public const string OrdersApproveTechnical = "orders.approve.technical";
     public const string OrdersApproveCredit = "orders.approve.credit";

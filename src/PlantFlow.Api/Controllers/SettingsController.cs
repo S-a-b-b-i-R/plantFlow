@@ -11,7 +11,7 @@ namespace PlantFlow.Api.Controllers;
 
 public record TenantSettingsDto(
     string Name, string Slug, VolumeUnit VolumeUnit, decimal? PumpFreeAboveCft,
-    SurveyRequirement RequireSurveyBeforePlanning, decimal MinMarginPercent, int PumpRestShifts,
+    SurveyRequirement RequireSurveyBeforePlanning, int PumpRestShifts,
     bool RequireCreditApproval);
 
 // What every signed-in user needs to display things. Nothing commercial.
@@ -33,9 +33,6 @@ public class TenantSettingsRequest
     [Required]
     public SurveyRequirement? RequireSurveyBeforePlanning { get; init; }
 
-    [Range(0.0, 100.0)]
-    public decimal MinMarginPercent { get; init; }
-
     // Pumps rest for this many following shifts of the same day. 0 turns the rule off.
     [Range(0, 3)]
     public int PumpRestShifts { get; init; } = 1;
@@ -49,7 +46,7 @@ public class TenantSettingsRequest
 public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
     private static TenantSettingsDto ToDto(Tenant t) => new(
-        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.MinMarginPercent, t.PumpRestShifts, t.RequireCreditApproval);
+        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval);
 
     [HttpGet]
     [HasPermission(Permissions.SettingsManage)]
@@ -78,12 +75,6 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
-        if (request.MinMarginPercent != Math.Round(request.MinMarginPercent, 2))
-        {
-            return Problem(title: "The margin can have at most 2 decimal places.",
-                statusCode: StatusCodes.Status400BadRequest);
-        }
-
         var tenant = await LoadTenantAsync(cancellationToken);
         var before = ToDto(tenant);
 
@@ -91,7 +82,6 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
         tenant.VolumeUnit = request.VolumeUnit!.Value;
         tenant.PumpFreeAboveCft = request.PumpFreeAboveCft;
         tenant.RequireSurveyBeforePlanning = request.RequireSurveyBeforePlanning!.Value;
-        tenant.MinMarginPercent = request.MinMarginPercent;
         tenant.PumpRestShifts = request.PumpRestShifts;
         tenant.RequireCreditApproval = request.RequireCreditApproval;
 

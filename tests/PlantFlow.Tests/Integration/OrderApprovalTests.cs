@@ -234,7 +234,6 @@ public class OrderApprovalTests(ApiFactory factory)
             settings.VolumeUnit,
             settings.PumpFreeAboveCft,
             settings.RequireSurveyBeforePlanning,
-            settings.MinMarginPercent,
             settings.PumpRestShifts,
             requireCreditApproval = true
         }, ApiFactory.Json)).EnsureSuccessStatusCode();

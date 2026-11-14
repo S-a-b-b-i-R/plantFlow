@@ -19,7 +19,7 @@ public class Tenant : AuditableEntity
     // Pump is free when the order's pump quantity reaches this (CFT). Null = never free.
     public decimal? PumpFreeAboveCft { get; set; }
     public SurveyRequirement RequireSurveyBeforePlanning { get; set; } = SurveyRequirement.PumpJobs;
-    public decimal MinMarginPercent { get; set; }
+    // public decimal MinMarginPercent { get; set; }
     // Pumps rest for this many following shifts of the same day after use. 0 turns the rule off.
     public int PumpRestShifts { get; set; } = 1;
     // When on, every order also needs a Credit approval.
