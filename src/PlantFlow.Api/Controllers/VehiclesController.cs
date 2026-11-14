@@ -112,7 +112,7 @@ public class VehiclesController(PlantFlowDbContext db, ICurrentUser currentUser,
 
         db.Vehicles.Add(vehicle);
         audit.Record(tenantId, "vehicle.created", "Vehicle", vehicle.Id.ToString(),
-            new { vehicle.Code, Type = vehicle.Type.ToString(), vehicle.PlantId });
+            new { vehicle.Code, Type = vehicle.Type.ToString(), vehicle.PlantId, vehicle.AssemblyMinutes });
         await db.SaveChangesAsync(cancellationToken);
 
         var dto = await db.Vehicles.AsNoTracking().Where(v => v.Id == vehicle.Id).Select(ToDto).FirstAsync(cancellationToken);
@@ -143,9 +143,16 @@ public class VehiclesController(PlantFlowDbContext db, ICurrentUser currentUser,
         vehicle.PlateNumber = plate;
         vehicle.DefaultDriverId = request.DefaultDriverId;
         vehicle.Status = request.Status;
-
+        vehicle.AssemblyMinutes = request.AssemblyMinutes;
         audit.Record(vehicle.TenantId, "vehicle.updated", "Vehicle", vehicle.Id.ToString(),
-            new { vehicle.Code, Status = vehicle.Status.ToString(), vehicle.PlantId });
+            new
+            {
+                vehicle.Code,
+                Status = vehicle.Status.ToString(),
+                vehicle.PlantId,
+                vehicle.DefaultDriverId,
+                vehicle.AssemblyMinutes
+            });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }

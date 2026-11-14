@@ -1324,6 +1324,9 @@ namespace PlantFlow.Api.Migrations
                     b.Property<Guid>("SiteId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("SiteSurveyId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1353,6 +1356,8 @@ namespace PlantFlow.Api.Migrations
                     b.HasIndex("SalesRepId");
 
                     b.HasIndex("SiteId");
+
+                    b.HasIndex("SiteSurveyId");
 
                     b.HasIndex("TenantId", "CustomerId");
 
@@ -1785,12 +1790,36 @@ namespace PlantFlow.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("AccuracyMeters")
+                        .HasPrecision(8, 1)
+                        .HasColumnType("decimal(8,1)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<string>("LocationNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal?>("PipingMetres")
+                        .HasPrecision(6, 1)
+                        .HasColumnType("decimal(6,1)");
+
+                    b.Property<string>("PumpPosition")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("Result")
                         .IsRequired()
@@ -1809,6 +1838,10 @@ namespace PlantFlow.Api.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("TruckConnectionPoint")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId");
@@ -1816,6 +1849,51 @@ namespace PlantFlow.Api.Migrations
                     b.HasIndex("SiteId", "SurveyedOn");
 
                     b.ToTable("SiteSurveys");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Planning.SiteSurveyImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Caption")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("SizeBytes")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SurveyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SurveyId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("SiteSurveyImages");
                 });
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Pricing.Price", b =>
@@ -2361,6 +2439,11 @@ namespace PlantFlow.Api.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("PlantFlow.Api.Domain.Planning.SiteSurvey", null)
+                        .WithMany()
+                        .HasForeignKey("SiteSurveyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -2586,6 +2669,23 @@ namespace PlantFlow.Api.Migrations
                     b.Navigation("Site");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.Planning.SiteSurveyImage", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.Planning.SiteSurvey", "Survey")
+                        .WithMany("Images")
+                        .HasForeignKey("SurveyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Survey");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Pricing.Price", b =>
                 {
                     b.HasOne("PlantFlow.Api.Domain.MasterData.Customer", "Customer")
@@ -2667,6 +2767,11 @@ namespace PlantFlow.Api.Migrations
             modelBuilder.Entity("PlantFlow.Api.Domain.Planning.ShiftPlan", b =>
                 {
                     b.Navigation("Pours");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Planning.SiteSurvey", b =>
+                {
+                    b.Navigation("Images");
                 });
 #pragma warning restore 612, 618
         }
