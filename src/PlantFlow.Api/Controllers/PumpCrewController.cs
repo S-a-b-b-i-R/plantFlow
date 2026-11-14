@@ -19,7 +19,7 @@ public class PumpCrewRequest
 
 [ApiController]
 [Route("api/vehicles/{id:guid}/crew")]
-public class PumpCrewController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
+public class PumpCrewController(PlantFlowDbContext db, AuditWriter audit) : ControllerBase
 {
     [HttpGet]
     [HasPermission(Permissions.MasterDataView)]
