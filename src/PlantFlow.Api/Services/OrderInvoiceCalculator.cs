@@ -14,19 +14,30 @@ public record InvoiceAdjustmentDto(
     Guid Id, AdjustmentKind Kind, string Reason, decimal? QuantityCft, decimal Amount, DateTime CreatedAtUtc);
 
 // Final is true once the order is closed and the figures are frozen. Before that they are provisional.
+// TaxableAmount is what VAT is worked out on. It is 0 for a VAT-exempt customer.
 public record InvoiceDto(
     Guid OrderId, string Number, OrderStatus Status, bool Final,
     List<InvoiceLineDto> Lines, List<OrderChargeDto> Charges, List<InvoiceAdjustmentDto> Adjustments,
     decimal ConcreteAmount, decimal ChargesAmount, decimal AdjustmentsAmount,
-    decimal Subtotal, decimal VatPercent, decimal VatAmount, decimal Total, bool CanClose);
+    decimal Subtotal, decimal TaxableAmount, bool VatExempt,
+    decimal VatPercent, decimal VatAmount, decimal Total, bool CanClose);
 
 public class OrderInvoiceCalculator(PlantFlowDbContext db)
 {
-    // The one place that decides what VAT is charged on. Today: on concrete and charges, after adjustments.
-    // This is where a company setting for it will plug in later.
-    public static (decimal Vat, decimal Total) Totals(decimal subtotal, decimal vatPercent)
+    // The taxable amount is the concrete (if the company taxes it) plus the charges that carry VAT,
+    // less the adjustments, and never below zero. An exempt customer has no taxable amount.
+    public static decimal Taxable(
+        bool vatExempt, bool vatOnConcrete, decimal concrete, IEnumerable<OrderChargeDto> charges, decimal adjustments)
     {
-        var vat = Math.Round(subtotal * vatPercent / 100m, 2);
+        if (vatExempt) return 0m;
+
+        var taxable = (vatOnConcrete ? concrete : 0m) + charges.Where(c => c.VatApplies).Sum(c => c.Amount) - adjustments;
+        return Math.Max(0m, taxable);
+    }
+
+    public static (decimal Vat, decimal Total) Totals(decimal subtotal, decimal taxable, decimal vatPercent)
+    {
+        var vat = Math.Round(taxable * vatPercent / 100m, 2);
         return (vat, subtotal + vat);
     }
 
@@ -38,6 +49,8 @@ public class OrderInvoiceCalculator(PlantFlowDbContext db)
                 o.Number,
                 o.Status,
                 o.ClosedAtUtc,
+                o.VatExempt,
+                o.VatOnConcrete,
                 o.InvoiceVatPercent,
                 o.InvoiceSubtotal,
                 o.InvoiceVatAmount,
@@ -72,7 +85,7 @@ public class OrderInvoiceCalculator(PlantFlowDbContext db)
         }).ToList();
 
         var charges = await db.OrderCharges.AsNoTracking().Where(c => c.OrderId == orderId).OrderBy(c => c.Description)
-            .Select(c => new OrderChargeDto(c.Kind, c.Description, c.QuantityCft, c.RatePerCft, c.Amount))
+            .Select(c => new OrderChargeDto(c.Kind, c.Description, c.QuantityCft, c.RatePerCft, c.Amount, c.VatApplies))
             .ToListAsync(cancellationToken);
 
         var adjustments = await db.OrderAdjustments.AsNoTracking().Where(a => a.OrderId == orderId)
@@ -84,6 +97,7 @@ public class OrderInvoiceCalculator(PlantFlowDbContext db)
         var chargesAmount = charges.Sum(c => c.Amount);
         var adjustmentsAmount = adjustments.Sum(a => a.Amount);
         var subtotal = concrete + chargesAmount - adjustmentsAmount;
+        var taxable = Taxable(order.VatExempt, order.VatOnConcrete, concrete, charges, adjustmentsAmount);
 
         var final = order.ClosedAtUtc is not null;
         decimal vatPercent, vat, total;
@@ -99,12 +113,13 @@ public class OrderInvoiceCalculator(PlantFlowDbContext db)
         {
             var policy = await db.Set<PricingPolicy>().AsNoTracking().FirstOrDefaultAsync(cancellationToken);
             vatPercent = policy?.VatPercent ?? PricingPolicy.DefaultVatPercent;
-            (vat, total) = Totals(subtotal, vatPercent);
+            (vat, total) = Totals(subtotal, taxable, vatPercent);
         }
 
         var canClose = !final && lines.All(l => !l.NeedsResolution) && subtotal >= 0;
         return new InvoiceDto(
             orderId, order.Number, order.Status, final, lines, charges, adjustments,
-            concrete, chargesAmount, adjustmentsAmount, subtotal, vatPercent, vat, total, canClose);
+            concrete, chargesAmount, adjustmentsAmount, subtotal, taxable, order.VatExempt,
+            vatPercent, vat, total, canClose);
     }
 }

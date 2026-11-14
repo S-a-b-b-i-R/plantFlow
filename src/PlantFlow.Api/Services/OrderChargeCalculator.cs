@@ -48,7 +48,17 @@ public class OrderChargeCalculator(PlantFlowDbContext db)
             Description = $"Pump charge: {pumped:0.##} CFT pumped",
             QuantityCft = pumped,
             RatePerCft = pump.DefaultAmount,
-            Amount = Math.Round(pumped * pump.DefaultAmount, 2)
+            Amount = Math.Round(pumped * pump.DefaultAmount, 2),
+            VatApplies = pump.VatApplies
         }, null);
+    }
+
+    // Freezes the tax terms the invoice will use: the customer's exemption and the company's VAT-on-concrete setting.
+    public async Task SnapshotTaxTermsAsync(Order order, CancellationToken cancellationToken)
+    {
+        order.VatExempt = await db.Customers.Where(c => c.Id == order.CustomerId)
+            .Select(c => c.VatExempt).FirstAsync(cancellationToken);
+        order.VatOnConcrete = await db.Tenants.Where(t => t.Id == order.TenantId)
+            .Select(t => t.VatOnConcrete).FirstAsync(cancellationToken);
     }
 }

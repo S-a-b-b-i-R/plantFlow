@@ -12,7 +12,7 @@ namespace PlantFlow.Api.Controllers;
 
 public record CustomerDto(
     Guid Id, string Code, string Name, CustomerType Type, string? Phone, string? Email,
-    Guid? SalesRepId, string? SalesRepName, ActiveStatus Status, int SiteCount);
+    Guid? SalesRepId, string? SalesRepName, ActiveStatus Status, int SiteCount, bool VatExempt);
 
 public class CustomerRequest
 {
@@ -33,6 +33,7 @@ public class CustomerRequest
     public Guid? SalesRepId { get; init; }
 
     public ActiveStatus Status { get; init; } = ActiveStatus.Active;
+    public bool VatExempt { get; init; }
 }
 
 [ApiController]
@@ -41,7 +42,7 @@ public class CustomersController(PlantFlowDbContext db, ICurrentUser currentUser
 {
     private static readonly Expression<Func<Customer, CustomerDto>> ToDto = c => new CustomerDto(
         c.Id, c.Code, c.Name, c.Type, c.Phone, c.Email, c.SalesRepId,
-        c.SalesRep != null ? c.SalesRep.Name : null, c.Status, c.Sites.Count());
+        c.SalesRep != null ? c.SalesRep.Name : null, c.Status, c.Sites.Count(), c.VatExempt);
 
     // ?search= matches code, name or phone.  ?status=  ?type=  ?salesRepId=  ?sort=code|name, "-" for descending.
     [HttpGet]
@@ -107,11 +108,12 @@ public class CustomersController(PlantFlowDbContext db, ICurrentUser currentUser
             Phone = request.Phone?.Trim(),
             Email = request.Email?.Trim(),
             SalesRepId = request.SalesRepId,
-            Status = request.Status
+            Status = request.Status,
+            VatExempt = request.VatExempt
         };
 
         db.Customers.Add(customer);
-        audit.Record(tenantId, "customer.created", "Customer", customer.Id.ToString(), new { customer.Code, customer.Name });
+        audit.Record(tenantId, "customer.created", "Customer", customer.Id.ToString(), new { customer.Code, customer.Name, VatExempt = customer.VatExempt });
         await db.SaveChangesAsync(cancellationToken);
 
         var dto = await db.Customers.AsNoTracking().Where(c => c.Id == customer.Id).Select(ToDto).FirstAsync(cancellationToken);
@@ -146,9 +148,10 @@ public class CustomersController(PlantFlowDbContext db, ICurrentUser currentUser
         customer.Email = request.Email?.Trim();
         customer.SalesRepId = request.SalesRepId;
         customer.Status = request.Status;
+        customer.VatExempt = request.VatExempt;
 
         audit.Record(customer.TenantId, "customer.updated", "Customer", customer.Id.ToString(),
-            new { customer.Code, customer.Name, Status = customer.Status.ToString() });
+            new { customer.Code, customer.Name, Status = customer.Status.ToString(), VatExempt = customer.VatExempt });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }

@@ -12,7 +12,7 @@ namespace PlantFlow.Api.Controllers;
 public record TenantSettingsDto(
     string Name, string Slug, VolumeUnit VolumeUnit, decimal? PumpFreeAboveCft,
     SurveyRequirement RequireSurveyBeforePlanning, int PumpRestShifts,
-    bool RequireCreditApproval);
+    bool RequireCreditApproval, bool VatOnConcrete);
 
 // What every signed-in user needs to display things. Nothing commercial.
 public record PublicSettingsDto(string Name, VolumeUnit VolumeUnit);
@@ -39,6 +39,9 @@ public class TenantSettingsRequest
 
     // When on, every order also needs a Credit approval.
     public bool RequireCreditApproval { get; init; }
+
+    // Whether the concrete itself carries VAT. Leave it out to keep it on.
+    public bool VatOnConcrete { get; init; } = true;
 }
 
 [ApiController]
@@ -46,7 +49,7 @@ public class TenantSettingsRequest
 public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
     private static TenantSettingsDto ToDto(Tenant t) => new(
-        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval);
+        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete);
 
     [HttpGet]
     [HasPermission(Permissions.SettingsManage)]
@@ -84,9 +87,10 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
         tenant.RequireSurveyBeforePlanning = request.RequireSurveyBeforePlanning!.Value;
         tenant.PumpRestShifts = request.PumpRestShifts;
         tenant.RequireCreditApproval = request.RequireCreditApproval;
+        tenant.VatOnConcrete = request.VatOnConcrete;
 
         audit.Record(tenant.Id, "tenant.settings_changed", "Tenant", tenant.Id.ToString(),
-            new { Before = before, After = ToDto(tenant) });
+            new { Before = before, After = ToDto(tenant), VatOnConcreteChanged = before.VatOnConcrete != tenant.VatOnConcrete });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
