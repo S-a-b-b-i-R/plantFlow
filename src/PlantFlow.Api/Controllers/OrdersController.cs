@@ -15,7 +15,8 @@ public record OrderSummaryDto(
     Guid Id, string Number, Guid CustomerId, string CustomerName, Guid SiteId, string SiteName,
     Guid? SalesRepId, string? SalesRepName, Guid PlantId, string PlantCode, DateOnly RequestedDate,
     decimal DistanceKm, OrderStatus Status, string? PaymentTerms, string? Notes, string? CancelReason,
-    int LineCount, decimal TotalQuantityCft, decimal TotalValue, int BelowFloorLineCount);
+    int LineCount, decimal TotalQuantityCft, decimal TotalValue, int BelowFloorLineCount, DateTime? ConfirmedAtUtc, Guid? ConfirmedBy, ConfirmationMethod? ConfirmationMethod,
+    string? ConfirmationReference, string? HoldReason);
 
 public record OrderLineDto(
     Guid Id, Guid ProductId, string ProductCode, string ProductName, Guid? MixDesignId,
@@ -120,7 +121,8 @@ public class OrdersController(
         o.SalesRepId, o.SalesRep != null ? o.SalesRep.Name : null, o.PlantId, o.Plant.Code, o.RequestedDate,
         o.DistanceKm, o.Status, o.PaymentTerms, o.Notes, o.CancelReason,
         o.Lines.Count(), o.Lines.Sum(l => l.QuantityCft), o.Lines.Sum(l => l.QuantityCft * l.UnitPrice),
-        o.Lines.Count(l => l.FloorPrice != null && l.UnitPrice < l.FloorPrice));
+        o.Lines.Count(l => l.FloorPrice != null && l.UnitPrice < l.FloorPrice),
+        o.ConfirmedAtUtc, o.ConfirmedBy, o.ConfirmationMethod, o.ConfirmationReference, o.HoldReason);
 
     private static readonly Expression<Func<OrderLine, OrderLineDto>> ToLine = l => new OrderLineDto(
         l.Id, l.ProductId, l.Product.Code, l.Product.Name, l.MixDesignId,
@@ -282,6 +284,46 @@ public class OrdersController(
         return NoContent();
     }
 
+    // The Sales Manager changes a confirmed order. A below-floor line with a commercial change, or a higher
+    // total than the one approved, sends it back to Management (and Credit) before it is Confirmed again.
+    [HttpPut("{id:guid}/amend")]
+    [HasPermission(Permissions.OrdersApproveSalesManager)]
+    public async Task<IActionResult> Amend(Guid id, ReviseOrderRequest request, CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.Include(o => o.Lines).Include(o => o.Approvals)
+            .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null) return NotFound();
+
+        if (order.Status != OrderStatus.Confirmed)
+        {
+            return Problem(title: $"Only a confirmed order can be amended. This order is {order.Status}.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var (prepared, problem) = await PrepareAsync(request.Order, order, cancellationToken);
+        if (problem is not null) return problem;
+
+        var changes = Compare(order, request.Order, prepared!);
+        var lines = Apply(order, request.Order, prepared!);
+
+        var newTotal = lines.Sum(l => l.QuantityCft * l.UnitPrice);
+        var higher = newTotal > (order.ConfirmedTotal ?? 0m);
+        var reopen = higher || (changes.Commercial && lines.Any(OrderApprovalFlow.IsBelowFloor));
+
+        order.ConfirmedTotal = newTotal;
+        if (reopen)
+        {
+            order.ForceManagement = higher;
+            flow.WithdrawCommercialStages(order);
+            await flow.AdvanceAsync(order, lines, cancellationToken);
+        }
+
+        audit.Record(order.TenantId, "order.amended", "Order", order.Id.ToString(),
+            new { order.Number, Reason = request.Reason.Trim(), changes.Commercial, ApprovalAgain = reopen, NewTotal = newTotal, changes.Log });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
     // Recalculates every line's floor price with today's costs. A line whose floor cannot be calculated blocks the submit.
     [HttpPost("{id:guid}/submit")]
     [HasPermission(Permissions.OrdersEdit)]
@@ -334,7 +376,8 @@ public class OrdersController(
         var order = await db.Orders.Include(o => o.Approvals).FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order is null) return NotFound();
 
-        if (order.Status is not (OrderStatus.Draft or OrderStatus.Submitted or OrderStatus.InApproval or OrderStatus.Approved))
+        if (order.Status is not (OrderStatus.Draft or OrderStatus.Submitted or OrderStatus.InApproval
+                         or OrderStatus.Approved or OrderStatus.Confirmed or OrderStatus.OnHold))
         {
             return Problem(title: $"An order that is {order.Status} cannot be cancelled here.",
                 statusCode: StatusCodes.Status409Conflict);
