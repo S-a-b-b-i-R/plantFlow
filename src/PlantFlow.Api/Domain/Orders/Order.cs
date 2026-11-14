@@ -14,6 +14,8 @@ public enum PourElement { Slab, Column, Footing, GroundLaying, Road, Other }
 
 public enum PourMethod { Chute, Pump, Crane }
 
+public enum ConfirmationMethod { Phone, Email, WhatsApp, WrittenPo, SignedQuotation }
+
 public class Order : AuditableEntity, ITenantOwned
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
@@ -47,6 +49,22 @@ public class Order : AuditableEntity, ITenantOwned
 
     // Counts up each time the order is submitted. Approvals belong to one round.
     public int ApprovalRound { get; set; }
+
+    // Confirmation: set when the customer's go-ahead is recorded.
+    public Guid? ConfirmedBy { get; set; }
+    public DateTime? ConfirmedAtUtc { get; set; }
+    public ConfirmationMethod? ConfirmationMethod { get; set; }
+    public string? ConfirmationReference { get; set; }
+
+    // The order total the approvals covered. An amendment that raises it needs Management again.
+    public decimal? ConfirmedTotal { get; set; }
+
+    // Set by an amendment that raised the total, so the Management stage stays required until it decides.
+    public bool ForceManagement { get; set; }
+
+    // On hold: where the order goes back to on release.
+    public OrderStatus? HeldFromStatus { get; set; }
+    public string? HoldReason { get; set; }
 
     public List<OrderApproval> Approvals { get; set; } = [];
 

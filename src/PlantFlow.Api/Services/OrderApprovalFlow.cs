@@ -19,11 +19,13 @@ public class OrderApprovalFlow(PlantFlowDbContext db, ICurrentUser currentUser)
     public void Start(Order order)
     {
         order.ApprovalRound++;
+        order.ForceManagement = false;
         OpenStage(order, ApprovalStage.SalesManager);
         ChangeStatus(order, OrderStatus.Submitted, null);
     }
 
     // Opens the stages that are needed once the Sales Manager has approved, and settles the status.
+    // An order that was already confirmed goes back to Confirmed when everything is approved again.
     public async Task AdvanceAsync(Order order, IEnumerable<OrderLine> lines, CancellationToken cancellationToken)
     {
         var current = Current(order);
@@ -39,7 +41,7 @@ public class OrderApprovalFlow(PlantFlowDbContext db, ICurrentUser currentUser)
             .Select(t => t.RequireCreditApproval).FirstAsync(cancellationToken);
 
         var required = new List<ApprovalStage>();
-        if (lines.Any(IsBelowFloor)) required.Add(ApprovalStage.Management);
+        if (order.ForceManagement || lines.Any(IsBelowFloor)) required.Add(ApprovalStage.Management);
         if (requireCredit) required.Add(ApprovalStage.Credit);
 
         foreach (var stage in required.Where(s => current.All(a => a.Stage != s)))
@@ -57,15 +59,27 @@ public class OrderApprovalFlow(PlantFlowDbContext db, ICurrentUser currentUser)
         var allApproved = required.All(stage =>
             current.Any(a => a.Stage == stage && a.Decision == ApprovalDecision.Approved));
 
-        ChangeStatus(order, allApproved ? OrderStatus.Approved : OrderStatus.InApproval, null);
+        var done = order.ConfirmedAtUtc is null ? OrderStatus.Approved : OrderStatus.Confirmed;
+        ChangeStatus(order, allApproved ? done : OrderStatus.InApproval, null);
     }
 
-    // A stage rejects: the order goes back to the rep and the other open approvals are withdrawn.
+    // A stage rejects: the order goes back to the rep, any confirmation is cleared, and the other open approvals are withdrawn.
     public void Reject(Order order, OrderApproval row, string comment)
     {
         row.Decision = ApprovalDecision.Rejected;
         WithdrawPending(order);
+        ClearConfirmation(order);
         ChangeStatus(order, OrderStatus.Draft, comment);
+    }
+
+    public void ClearConfirmation(Order order)
+    {
+        order.ConfirmedBy = null;
+        order.ConfirmedAtUtc = null;
+        order.ConfirmationMethod = null;
+        order.ConfirmationReference = null;
+        order.ConfirmedTotal = null;
+        order.ForceManagement = false;
     }
 
     public void WithdrawPending(Order order)
