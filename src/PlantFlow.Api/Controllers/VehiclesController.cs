@@ -12,7 +12,7 @@ namespace PlantFlow.Api.Controllers;
 
 public record VehicleDto(
     Guid Id, Guid PlantId, string PlantCode, string Code, VehicleType Type, decimal? CapacityCft,
-    string? PlateNumber, Guid? DefaultDriverId, string? DefaultDriverName, VehicleStatus Status);
+    string? PlateNumber, Guid? DefaultDriverId, string? DefaultDriverName, VehicleStatus Status, int? AssemblyMinutes);
 
 public class VehicleRequest
 {
@@ -34,6 +34,10 @@ public class VehicleRequest
     public Guid? DefaultDriverId { get; init; }
 
     public VehicleStatus Status { get; init; } = VehicleStatus.Available;
+
+    // Minutes to assemble this pump on site. Leave it out to use the company default.
+    [Range(0, 480)]
+    public int? AssemblyMinutes { get; init; }
 }
 
 [ApiController]
@@ -42,7 +46,7 @@ public class VehiclesController(PlantFlowDbContext db, ICurrentUser currentUser,
 {
     private static readonly Expression<Func<Vehicle, VehicleDto>> ToDto = v => new VehicleDto(
         v.Id, v.PlantId, v.Plant.Code, v.Code, v.Type, v.CapacityCft, v.PlateNumber,
-        v.DefaultDriverId, v.DefaultDriver != null ? v.DefaultDriver.Name : null, v.Status);
+        v.DefaultDriverId, v.DefaultDriver != null ? v.DefaultDriver.Name : null, v.Status, v.AssemblyMinutes);
 
     // ?search= matches code or plate.  ?plantId=  ?type=  ?status=  ?sort=code|capacity, "-" for descending.
     [HttpGet]
@@ -102,7 +106,8 @@ public class VehiclesController(PlantFlowDbContext db, ICurrentUser currentUser,
             CapacityCft = request.CapacityCft,
             PlateNumber = plate,
             DefaultDriverId = request.DefaultDriverId,
-            Status = request.Status
+            Status = request.Status,
+            AssemblyMinutes = request.AssemblyMinutes
         };
 
         db.Vehicles.Add(vehicle);
