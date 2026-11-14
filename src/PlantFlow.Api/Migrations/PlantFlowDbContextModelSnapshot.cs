@@ -543,6 +543,9 @@ namespace PlantFlow.Api.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("VatExempt")
+                        .HasColumnType("bit");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SalesRepId");
@@ -914,6 +917,9 @@ namespace PlantFlow.Api.Migrations
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("VatApplies")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
@@ -1329,6 +1335,12 @@ namespace PlantFlow.Api.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("VatExempt")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("VatOnConcrete")
+                        .HasColumnType("bit");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
@@ -1480,6 +1492,9 @@ namespace PlantFlow.Api.Migrations
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("VatApplies")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
@@ -1736,6 +1751,9 @@ namespace PlantFlow.Api.Migrations
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("VatOnConcrete")
+                        .HasColumnType("bit");
 
                     b.Property<string>("VolumeUnit")
                         .IsRequired()

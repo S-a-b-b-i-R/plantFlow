@@ -24,4 +24,5 @@ public class Tenant : AuditableEntity
     public int PumpRestShifts { get; set; } = 1;
     // When on, every order also needs a Credit approval.
     public bool RequireCreditApproval { get; set; }
+    public bool VatOnConcrete { get; set; } = true;
 }

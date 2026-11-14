@@ -81,6 +81,9 @@ public class Order : AuditableEntity, ITenantOwned
     public decimal? InvoiceSubtotal { get; set; }
     public decimal? InvoiceVatAmount { get; set; }
     public decimal? InvoiceTotal { get; set; }
+    // Copied at confirmation
+    public bool VatExempt { get; set; }
+    public bool VatOnConcrete { get; set; } = true;
 }
 
 public class OrderLine : ITenantOwned

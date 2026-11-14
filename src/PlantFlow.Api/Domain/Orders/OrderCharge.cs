@@ -19,4 +19,5 @@ public class OrderCharge : ITenantOwned
     public decimal QuantityCft { get; set; }
     public decimal RatePerCft { get; set; }
     public decimal Amount { get; set; }
+    public bool VatApplies { get; set; } = true;
 }

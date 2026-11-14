@@ -21,4 +21,5 @@ public class Customer : AuditableEntity, ITenantOwned
     public ActiveStatus Status { get; set; } = ActiveStatus.Active;
 
     public List<Site> Sites { get; set; } = [];
+    public bool VatExempt { get; set; }
 }

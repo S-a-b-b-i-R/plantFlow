@@ -19,4 +19,5 @@ public class ServiceCharge : AuditableEntity, ITenantOwned
     public ChargeBasis Basis { get; set; }
     public decimal DefaultAmount { get; set; }
     public ActiveStatus Status { get; set; } = ActiveStatus.Active;
+    public bool VatApplies { get; set; } = true;
 }
