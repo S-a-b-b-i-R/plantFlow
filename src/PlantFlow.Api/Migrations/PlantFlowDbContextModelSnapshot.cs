@@ -1223,6 +1223,12 @@ namespace PlantFlow.Api.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ClosedBy")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("ConfirmationMethod")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
@@ -1264,6 +1270,22 @@ namespace PlantFlow.Api.Migrations
                     b.Property<string>("HoldReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("InvoiceSubtotal")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<decimal?>("InvoiceTotal")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<decimal?>("InvoiceVatAmount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<decimal?>("InvoiceVatPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
@@ -1328,6 +1350,51 @@ namespace PlantFlow.Api.Migrations
                     b.HasIndex("TenantId", "Status");
 
                     b.ToTable("Orders");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("QuantityCft")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("OrderAdjustments");
                 });
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderApproval", b =>
@@ -1430,6 +1497,28 @@ namespace PlantFlow.Api.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("BilledCft")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<string>("BillingBasis")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("BillingNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("BillingResolvedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("BillingResolvedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("DeliveredCft")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
 
                     b.Property<decimal?>("FloorPrice")
                         .HasPrecision(12, 2)
@@ -2075,6 +2164,23 @@ namespace PlantFlow.Api.Migrations
                     b.Navigation("Site");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderAdjustment", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.Orders.Order", "Order")
+                        .WithMany("Adjustments")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Orders.OrderApproval", b =>
                 {
                     b.HasOne("PlantFlow.Api.Domain.Orders.Order", "Order")
@@ -2237,6 +2343,8 @@ namespace PlantFlow.Api.Migrations
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Orders.Order", b =>
                 {
+                    b.Navigation("Adjustments");
+
                     b.Navigation("Approvals");
 
                     b.Navigation("Charges");

@@ -47,6 +47,11 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.HasOne(o => o.SalesRep).WithMany().HasForeignKey(o => o.SalesRepId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(o => o.Plant).WithMany().HasForeignKey(o => o.PlantId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Tenant>().WithMany().HasForeignKey(o => o.TenantId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(o => o.InvoiceVatPercent).HasPrecision(5, 2);
+        builder.Property(o => o.InvoiceSubtotal).HasPrecision(14, 2);
+        builder.Property(o => o.InvoiceVatAmount).HasPrecision(14, 2);
+        builder.Property(o => o.InvoiceTotal).HasPrecision(14, 2);
     }
 }
 
@@ -67,6 +72,11 @@ public class OrderLineConfiguration : IEntityTypeConfiguration<OrderLine>
         builder.HasOne(l => l.MixDesign).WithMany().HasForeignKey(l => l.MixDesignId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(l => l.Price).WithMany().HasForeignKey(l => l.PriceId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Tenant>().WithMany().HasForeignKey(l => l.TenantId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(l => l.DeliveredCft).HasPrecision(12, 2);
+        builder.Property(l => l.BilledCft).HasPrecision(12, 2);
+        builder.Property(l => l.BillingBasis).HasConversion<string>().HasMaxLength(20);
+        builder.Property(l => l.BillingNote).HasMaxLength(500);
     }
 }
 
@@ -114,5 +124,21 @@ public class OrderChargeConfiguration : IEntityTypeConfiguration<OrderCharge>
         builder.HasOne(c => c.Order).WithMany(o => o.Charges).HasForeignKey(c => c.OrderId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<ServiceCharge>().WithMany().HasForeignKey(c => c.ServiceChargeId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Tenant>().WithMany().HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class OrderAdjustmentConfiguration : IEntityTypeConfiguration<OrderAdjustment>
+{
+    public void Configure(EntityTypeBuilder<OrderAdjustment> builder)
+    {
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.Kind).HasConversion<string>().HasMaxLength(20);
+        builder.Property(a => a.Reason).HasMaxLength(200);
+        builder.Property(a => a.QuantityCft).HasPrecision(12, 2);
+        builder.Property(a => a.Amount).HasPrecision(14, 2);
+        builder.HasIndex(a => a.OrderId);
+
+        builder.HasOne(a => a.Order).WithMany(o => o.Adjustments).HasForeignKey(a => a.OrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(a => a.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }
