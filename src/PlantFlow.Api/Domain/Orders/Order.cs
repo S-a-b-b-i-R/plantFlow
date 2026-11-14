@@ -72,6 +72,15 @@ public class Order : AuditableEntity, ITenantOwned
 
     public List<OrderLine> Lines { get; set; } = [];
     public List<OrderStatusHistory> History { get; set; } = [];
+    public List<OrderAdjustment> Adjustments { get; set; } = [];
+
+    // Closing: the invoice figures are frozen here.
+    public Guid? ClosedBy { get; set; }
+    public DateTime? ClosedAtUtc { get; set; }
+    public decimal? InvoiceVatPercent { get; set; }
+    public decimal? InvoiceSubtotal { get; set; }
+    public decimal? InvoiceVatAmount { get; set; }
+    public decimal? InvoiceTotal { get; set; }
 }
 
 public class OrderLine : ITenantOwned
@@ -105,6 +114,16 @@ public class OrderLine : ITenantOwned
     public PourElement PourElement { get; set; }
     public PourMethod PourMethod { get; set; }
     public string? Notes { get; set; }
+
+    // Entered by hand until deliveries exist.
+    public decimal DeliveredCft { get; set; }
+
+    // Set when Accounts resolves a difference, or at close when delivered equals ordered.
+    public decimal? BilledCft { get; set; }
+    public BillingBasis? BillingBasis { get; set; }
+    public string? BillingNote { get; set; }
+    public Guid? BillingResolvedBy { get; set; }
+    public DateTime? BillingResolvedAtUtc { get; set; }
 }
 
 public class OrderStatusHistory : ITenantOwned

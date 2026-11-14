@@ -108,4 +108,28 @@ public static class TestData
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<OrderDetailDto>(ApiFactory.Json))!;
     }
+
+    // Created, submitted, approved by the sales manager and confirmed. The list price of 120 is above the floor.
+    public static async Task<OrderDetailDto> CreateConfirmedAsync(HttpClient admin, OrderWorld w, object[] lines)
+    {
+        var draft = await CreateDraftAsync(admin, w, lines);
+        (await admin.PostAsync($"/api/orders/{draft.Order.Id}/submit", null)).EnsureSuccessStatusCode();
+        (await admin.PostAsJsonAsync($"/api/orders/{draft.Order.Id}/approvals/sales-manager/approve",
+            new { comment = (string?)null })).EnsureSuccessStatusCode();
+        (await admin.PostAsJsonAsync($"/api/orders/{draft.Order.Id}/confirm", new { method = "Phone" })).EnsureSuccessStatusCode();
+        return (await admin.GetFromJsonAsync<OrderDetailDto>($"/api/orders/{draft.Order.Id}", ApiFactory.Json))!;
+    }
+
+    // Sets the pump rate per CFT, whether the company already has a pump charge or not.
+    public static async Task SetPumpRateAsync(HttpClient admin, decimal rate)
+    {
+        var body = new { code = "PUMP", name = "Pump charge", kind = "Pump", basis = "PerCft", defaultAmount = rate };
+        var created = await admin.PostAsJsonAsync("/api/service-charges", body);
+        if (created.StatusCode == HttpStatusCode.Created) return;
+
+        var list = await admin.GetFromJsonAsync<PlantFlow.Api.Infrastructure.PagedResult<ServiceChargeDto>>(
+            "/api/service-charges?kind=Pump", ApiFactory.Json);
+        var id = list!.Items.Single().Id;
+        (await admin.PutAsJsonAsync($"/api/service-charges/{id}", body)).EnsureSuccessStatusCode();
+    }
 }
