@@ -10,14 +10,13 @@ public class SettingsTests(ApiFactory factory)
 {
     private static object Body(
         string name = "Valid Co.", string? volumeUnit = "Cft", decimal? pumpFree = null,
-        string? survey = "PumpJobs", decimal margin = 5m, int rest = 1) =>
+        string? survey = "PumpJobs", int rest = 1) =>
         new
         {
             name,
             volumeUnit,
             pumpFreeAboveCft = pumpFree,
             requireSurveyBeforePlanning = survey,
-            minMarginPercent = margin,
             pumpRestShifts = rest
         };
 
@@ -31,7 +30,6 @@ public class SettingsTests(ApiFactory factory)
         Assert.Equal(VolumeUnit.Cft, settings!.VolumeUnit);
         Assert.Null(settings.PumpFreeAboveCft);
         Assert.Equal(SurveyRequirement.PumpJobs, settings.RequireSurveyBeforePlanning);
-        Assert.Equal(0m, settings.MinMarginPercent);
         Assert.Equal(1, settings.PumpRestShifts);
     }
 
@@ -41,7 +39,7 @@ public class SettingsTests(ApiFactory factory)
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
 
         var update = await admin.PutAsJsonAsync("/api/settings",
-            Body("Renamed Co.", "M3", 1200.50m, "All", 7.5m, 2));
+            Body("Renamed Co.", "M3", 1200.50m, "All", 2));
         Assert.Equal(HttpStatusCode.NoContent, update.StatusCode);
 
         var settings = await admin.GetFromJsonAsync<TenantSettingsDto>("/api/settings", ApiFactory.Json);
@@ -49,7 +47,6 @@ public class SettingsTests(ApiFactory factory)
         Assert.Equal(VolumeUnit.M3, settings.VolumeUnit);
         Assert.Equal(1200.50m, settings.PumpFreeAboveCft);
         Assert.Equal(SurveyRequirement.All, settings.RequireSurveyBeforePlanning);
-        Assert.Equal(7.5m, settings.MinMarginPercent);
         Assert.Equal(2, settings.PumpRestShifts);
 
         var audit = await admin.GetFromJsonAsync<List<AuditLogDto>>("/api/audit", ApiFactory.Json);
@@ -77,8 +74,6 @@ public class SettingsTests(ApiFactory factory)
 
         var restTooHigh = await admin.PutAsJsonAsync("/api/settings", Body(rest: 5));
         var negativeRest = await admin.PutAsJsonAsync("/api/settings", Body(rest: -1));
-        var marginTooHigh = await admin.PutAsJsonAsync("/api/settings", Body(margin: 150m));
-        var marginDecimals = await admin.PutAsJsonAsync("/api/settings", Body(margin: 5.123m));
         var thresholdNegative = await admin.PutAsJsonAsync("/api/settings", Body(pumpFree: -10m));
         var thresholdDecimals = await admin.PutAsJsonAsync("/api/settings", Body(pumpFree: 100.123m));
         var badUnit = await admin.PutAsJsonAsync("/api/settings", Body(volumeUnit: "Gallons"));
@@ -87,7 +82,7 @@ public class SettingsTests(ApiFactory factory)
         var shortName = await admin.PutAsJsonAsync("/api/settings", Body(name: "A"));
 
         Assert.All(
-            new[] { restTooHigh, negativeRest, marginTooHigh, marginDecimals, thresholdNegative, thresholdDecimals,
+            new[] { restTooHigh, negativeRest, thresholdNegative, thresholdDecimals,
                     badUnit, missingUnit, badSurvey, shortName },
             response => Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode));
     }
@@ -124,7 +119,7 @@ public class SettingsTests(ApiFactory factory)
         var a = await factory.CreateCompanyAsync();
         var b = await factory.CreateCompanyAsync();
 
-        (await a.Admin.Client.PutAsJsonAsync("/api/settings", Body("Company A Renamed", "M3", 500m, "Off", 9m, 0)))
+        (await a.Admin.Client.PutAsJsonAsync("/api/settings", Body("Company A Renamed", "M3", 500m, "Off", 0)))
             .EnsureSuccessStatusCode();
 
         var seenByB = await b.Admin.Client.GetFromJsonAsync<TenantSettingsDto>("/api/settings", ApiFactory.Json);

@@ -26,7 +26,7 @@ public static class DefaultRoles
         ["Accounts"] =
         [
             MasterDataView, MixDesignsView, CostsManage, PricesView, PricesEdit, PricesApprove,
-            OrdersView, OrdersApprovePricing, OrdersBillingResolve, LedgerView, LedgerManage,
+            OrdersView, OrdersBillingResolve, LedgerView, LedgerManage,
             TargetsView, DashboardsView
         ],
 
