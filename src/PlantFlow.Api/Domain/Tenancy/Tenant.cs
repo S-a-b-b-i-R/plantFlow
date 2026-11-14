@@ -25,4 +25,10 @@ public class Tenant : AuditableEntity
     // When on, every order also needs a Credit approval.
     public bool RequireCreditApproval { get; set; }
     public bool VatOnConcrete { get; set; } = true;
+    // Used to work out when a pump and the first truck must leave the plant.
+    public int AverageSpeedKmh { get; set; } = 25;
+    public int PumpAssemblyMinutes { get; set; } = 90;
+
+    // Used only for the estimate of truck loads in a plan.
+    public decimal TruckLoadCft { get; set; } = 100m;
 }

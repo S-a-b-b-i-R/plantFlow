@@ -12,7 +12,7 @@ namespace PlantFlow.Api.Controllers;
 public record TenantSettingsDto(
     string Name, string Slug, VolumeUnit VolumeUnit, decimal? PumpFreeAboveCft,
     SurveyRequirement RequireSurveyBeforePlanning, int PumpRestShifts,
-    bool RequireCreditApproval, bool VatOnConcrete);
+    bool RequireCreditApproval, bool VatOnConcrete, int AverageSpeedKmh, int PumpAssemblyMinutes, decimal TruckLoadCft);
 
 // What every signed-in user needs to display things. Nothing commercial.
 public record PublicSettingsDto(string Name, VolumeUnit VolumeUnit);
@@ -42,6 +42,18 @@ public class TenantSettingsRequest
 
     // Whether the concrete itself carries VAT. Leave it out to keep it on.
     public bool VatOnConcrete { get; init; } = true;
+
+    // Pump and first-truck leave times use this speed. Leave it out to keep 25.
+    [Range(1, 120)]
+    public int AverageSpeedKmh { get; init; } = 25;
+
+    // Default minutes to assemble a pump on site.
+    [Range(0, 480)]
+    public int PumpAssemblyMinutes { get; init; } = 90;
+
+    // Used for the estimate of truck loads in a plan.
+    [Range(1.0, 100000.0)]
+    public decimal TruckLoadCft { get; init; } = 100m;
 }
 
 [ApiController]
@@ -49,7 +61,7 @@ public class TenantSettingsRequest
 public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
     private static TenantSettingsDto ToDto(Tenant t) => new(
-        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete);
+        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete, t.AverageSpeedKmh, t.PumpAssemblyMinutes, t.TruckLoadCft);
 
     [HttpGet]
     [HasPermission(Permissions.SettingsManage)]
@@ -88,9 +100,19 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
         tenant.PumpRestShifts = request.PumpRestShifts;
         tenant.RequireCreditApproval = request.RequireCreditApproval;
         tenant.VatOnConcrete = request.VatOnConcrete;
+        tenant.AverageSpeedKmh = request.AverageSpeedKmh;
+        tenant.PumpAssemblyMinutes = request.PumpAssemblyMinutes;
+        tenant.TruckLoadCft = request.TruckLoadCft;
 
         audit.Record(tenant.Id, "tenant.settings_changed", "Tenant", tenant.Id.ToString(),
-            new { Before = before, After = ToDto(tenant), VatOnConcreteChanged = before.VatOnConcrete != tenant.VatOnConcrete });
+            new
+            {
+                Before = before,
+                After = ToDto(tenant),
+                VatOnConcreteChanged = before.VatOnConcrete != tenant.VatOnConcrete,
+                PumpAssemblyMinutesChanged = before.PumpAssemblyMinutes != tenant.PumpAssemblyMinutes,
+                TruckLoadCftChanged = before.TruckLoadCft != tenant.TruckLoadCft
+            });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }

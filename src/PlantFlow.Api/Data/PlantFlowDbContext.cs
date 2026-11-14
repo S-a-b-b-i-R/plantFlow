@@ -10,6 +10,7 @@ using PlantFlow.Api.Domain.MixDesigns;
 using PlantFlow.Api.Domain.Costing;
 using PlantFlow.Api.Domain.Pricing;
 using PlantFlow.Api.Domain.Orders;
+using PlantFlow.Api.Domain.Planning;
 
 namespace PlantFlow.Api.Data;
 
@@ -60,6 +61,10 @@ public class PlantFlowDbContext : DbContext
     public DbSet<OrderApproval> OrderApprovals => Set<OrderApproval>();
     public DbSet<OrderCharge> OrderCharges => Set<OrderCharge>();
     public DbSet<OrderAdjustment> OrderAdjustments => Set<OrderAdjustment>();
+    public DbSet<SiteSurvey> SiteSurveys => Set<SiteSurvey>();
+    public DbSet<PumpCrewMember> PumpCrewMembers => Set<PumpCrewMember>();
+    public DbSet<ShiftPlan> ShiftPlans => Set<ShiftPlan>();
+    public DbSet<Pour> Pours => Set<Pour>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PlantFlowDbContext).Assembly);
