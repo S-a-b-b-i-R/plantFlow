@@ -85,6 +85,8 @@ if (app.Environment.IsDevelopment())
 {
     await DbSeeder.EnsureDemoTenantAsync(app.Services);
     await DemoDataSeeder.EnsureDemoDataAsync(app.Services);
+    await DemoAccessSeeder.EnsureAdminInDemoCompanyAsync(app.Services);
+    await DemoLiveDaySeeder.EnsureLiveDayAsync(app.Services);
 }
 
 if (app.Environment.IsDevelopment())
