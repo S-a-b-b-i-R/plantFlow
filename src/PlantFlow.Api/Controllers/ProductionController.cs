@@ -13,7 +13,8 @@ namespace PlantFlow.Api.Controllers;
 public record LoadDto(
     Guid Id, Guid PourId, int Number, Guid TruckId, decimal QuantityCft, string? QuantityReason, string Stage,
     DateTime ProducedAtUtc, DateTime? DispatchedAtUtc, DateTime? ArrivedAtUtc, DateTime? PouringStartedAtUtc,
-    DateTime? PouringEndedAtUtc, DateTime? ReturnedAtUtc, DateTime? CancelledAtUtc, string? CancelReason);
+    DateTime? PouringEndedAtUtc, DateTime? ReturnedAtUtc, DateTime? CancelledAtUtc, string? CancelReason,
+    decimal ReturnedCft, DateTime? RejectedAtUtc, string? RejectReason, Guid? SourceReturnId);
 
 // What the dispatcher and driver need to know about the site.
 public record PourSurveyDto(
@@ -40,6 +41,9 @@ public class ProduceRequest
 
     [StringLength(300)]
     public string? Reason { get; init; }
+
+    // Make the load from returned concrete instead of fresh. It must be Reusable or Treated, the same product and the same shift.
+    public Guid? ReturnedConcreteId { get; init; }
 }
 
 public class OverProduceRequest : ProduceRequest
@@ -131,6 +135,7 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
         var load = await db.TruckLoads.FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
         if (load is null) return NotFound();
         if (load.CancelledAtUtc is not null) return Fail(StatusCodes.Status409Conflict, "This load was cancelled.");
+        if (load.RejectedAtUtc is not null) return Fail(StatusCodes.Status409Conflict, "This load was rejected.");
         if (load.DispatchedAtUtc is not null) return Fail(StatusCodes.Status409Conflict, "This load has already been dispatched.");
 
         if (Resolve(request.At) is not { } at) return Fail(StatusCodes.Status400BadRequest, "The time cannot be in the future.");
@@ -151,7 +156,21 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
         var load = await db.TruckLoads.FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
         if (load is null) return NotFound();
         if (load.CancelledAtUtc is not null) return Fail(StatusCodes.Status409Conflict, "This load was already cancelled.");
+        if (load.RejectedAtUtc is not null) return Fail(StatusCodes.Status409Conflict, "This load was rejected.");
         if (load.PouringStartedAtUtc is not null) return Fail(StatusCodes.Status409Conflict, "Pouring has started, so the load cannot be cancelled.");
+
+        // Concrete that came from returned stock goes back to it.
+        if (load.SourceReturnId is { } sourceId)
+        {
+            var stock = await db.ReturnedConcretes.FirstAsync(r => r.Id == sourceId, cancellationToken);
+            if (stock.Status == ReturnStatus.Dumped)
+            {
+                return Fail(StatusCodes.Status409Conflict, "The returned concrete this load came from has been dumped.");
+            }
+
+            stock.RemainingCft += load.QuantityCft;
+            if (stock.Status == ReturnStatus.Used) stock.Status = ReturnStatus.Reusable;
+        }
 
         load.CancelledAtUtc = DateTime.UtcNow;
         load.CancelReason = request.Reason!.Trim();
@@ -167,6 +186,28 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
     {
         var load = await db.TruckLoads.FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
         if (load is null) return NotFound();
+        if (load.RejectedAtUtc is not null)
+        {
+            if (request.Step != LoadStep.Returned || load.DispatchedAtUtc is null)
+            {
+                return Fail(StatusCodes.Status409Conflict, "A rejected load can only be recorded as returned to the plant.");
+            }
+
+            if (Resolve(request.At) is not { } returnedAt)
+            {
+                return Fail(StatusCodes.Status400BadRequest, "The time cannot be in the future.");
+            }
+
+            if (returnedAt < load.RejectedAtUtc)
+            {
+                return Fail(StatusCodes.Status400BadRequest, "A load cannot return before it was rejected.");
+            }
+
+            load.ReturnedAtUtc = returnedAt;
+            audit.Record(load.TenantId, "load.step", "TruckLoad", load.Id.ToString(), new { load.PourId, Step = "Returned", at = returnedAt });
+            await db.SaveChangesAsync(cancellationToken);
+            return ToDto(load);
+        }
         if (load.CancelledAtUtc is not null) return Fail(StatusCodes.Status409Conflict, "This load was cancelled.");
         if (load.DispatchedAtUtc is null) return Fail(StatusCodes.Status409Conflict, "Dispatch the load first.");
 
@@ -200,7 +241,8 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
         // What was poured is what was delivered.
         if (step == LoadStep.PouringEnded)
         {
-            await RecalculateDeliveredAsync(load.PourId, cancellationToken);
+            var lineId = await db.Pours.Where(p => p.Id == load.PourId).Select(p => p.OrderLineId).FirstAsync(cancellationToken);
+            await DeliveredQuantity.RecalculateAsync(db, audit, lineId, cancellationToken);
         }
 
         return ToDto(load);
@@ -241,13 +283,16 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
     }
 
     private async Task<ActionResult<LoadDto>> ProduceAsync(
-        Guid pourId, ProduceRequest request, string? overrideReason, CancellationToken cancellationToken)
+    Guid pourId, ProduceRequest request, string? overrideReason, CancellationToken cancellationToken)
     {
         var pour = await db.Pours.AsNoTracking().Where(p => p.Id == pourId).Select(p => new
         {
             p.TenantId,
             p.PlannedCft,
             p.PumpId,
+            p.ShiftPlanId,
+            PlantId = p.ShiftPlan.PlantId,
+            ProductId = p.OrderLine.ProductId,
             PlanStatus = p.ShiftPlan.Status,
             OrderStatus = p.OrderLine.Order.Status
         }).FirstOrDefaultAsync(cancellationToken);
@@ -282,13 +327,38 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
             return Fail(StatusCodes.Status409Conflict, "This truck is still out on another load.");
         }
 
-        var produced = await db.TruckLoads.Where(l => l.PourId == pourId && l.CancelledAtUtc == null)
+        // Returned concrete: Reusable or Treated, the same product, the same plant, and the same shift unless overridden.
+        ReturnedConcrete? stock = null;
+        if (request.ReturnedConcreteId is { } stockId)
+        {
+            stock = await db.ReturnedConcretes.FirstOrDefaultAsync(r => r.Id == stockId, cancellationToken);
+            if (stock is null) return Fail(StatusCodes.Status400BadRequest, "Choose returned concrete that exists.");
+
+            if (stock.Status is not (ReturnStatus.Reusable or ReturnStatus.Treated) || stock.RemainingCft <= 0)
+            {
+                return Fail(StatusCodes.Status409Conflict, "That returned concrete is not available. It must be inspected as reusable or treated first.");
+            }
+
+            if (stock.ProductId != pour.ProductId || stock.PlantId != pour.PlantId)
+            {
+                return Fail(StatusCodes.Status409Conflict, "That returned concrete is a different product or from another plant.");
+            }
+
+            if (overrideReason is null && stock.ShiftPlanId != pour.ShiftPlanId)
+            {
+                return Fail(StatusCodes.Status409Conflict, "Returned concrete can only be used in the shift it came from.");
+            }
+        }
+
+        var produced = await db.TruckLoads
+            .Where(l => l.PourId == pourId && l.CancelledAtUtc == null && l.RejectedAtUtc == null)
             .SumAsync(l => (decimal?)l.QuantityCft, cancellationToken) ?? 0m;
         var remaining = pour.PlannedCft - produced;
 
         var companyLoad = await db.Tenants.Where(t => t.Id == pour.TenantId)
             .Select(t => t.TruckLoadCft).FirstAsync(cancellationToken);
         var size = truck.CapacityCft ?? companyLoad;
+        var available = stock?.RemainingCft ?? decimal.MaxValue;
 
         decimal quantity;
         var note = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
@@ -300,8 +370,8 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
                 return Fail(StatusCodes.Status409Conflict, "This pour has already been produced in full.");
             }
 
-            // The usual load, or whatever is left if that is less.
-            var usual = Math.Min(size, remaining);
+            // The usual load, or whatever is left of the pour or the returned concrete if that is less.
+            var usual = Math.Min(Math.Min(size, remaining), available);
             quantity = request.QuantityCft ?? usual;
             if (quantity > size)
             {
@@ -320,13 +390,18 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
         }
         else
         {
-            quantity = request.QuantityCft ?? size;
+            quantity = request.QuantityCft ?? Math.Min(size, available);
             if (quantity > size)
             {
                 return Fail(StatusCodes.Status400BadRequest, $"A load cannot be more than the truck's load size of {size} CFT.");
             }
 
             note = $"Over plan: {overrideReason.Trim()}";
+        }
+
+        if (stock is not null && quantity > stock.RemainingCft)
+        {
+            return Fail(StatusCodes.Status409Conflict, $"Only {stock.RemainingCft} CFT of that returned concrete remain.");
         }
 
         var load = new TruckLoad
@@ -337,48 +412,24 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
             Number = await db.TruckLoads.CountAsync(l => l.PourId == pourId, cancellationToken) + 1,
             QuantityCft = quantity,
             QuantityReason = note,
+            SourceReturnId = stock?.Id,
             ProducedBy = currentUser.UserId
         };
 
+        if (stock is not null)
+        {
+            stock.RemainingCft -= quantity;
+            if (stock.RemainingCft == 0) stock.Status = ReturnStatus.Used;
+        }
+
         db.TruckLoads.Add(load);
         audit.Record(load.TenantId, overrideReason is null ? "load.produced" : "load.produced_over_plan", "TruckLoad",
-            load.Id.ToString(), new { load.PourId, load.TruckId, load.Number, load.QuantityCft, load.QuantityReason });
+            load.Id.ToString(), new { load.PourId, load.TruckId, load.Number, load.QuantityCft, load.QuantityReason, load.SourceReturnId });
         await db.SaveChangesAsync(cancellationToken);
 
         return Created($"api/loads/{load.Id}", ToDto(load));
     }
 
-    // The order line's delivered quantity is what its loads poured. It starts the order when the first concrete is poured.
-    private async Task RecalculateDeliveredAsync(Guid pourId, CancellationToken cancellationToken)
-    {
-        var lineId = await db.Pours.Where(p => p.Id == pourId).Select(p => p.OrderLineId).FirstAsync(cancellationToken);
-        var line = await db.OrderLines.Include(l => l.Order).FirstAsync(l => l.Id == lineId, cancellationToken);
-        if (line.Order.Status == OrderStatus.Completed) return;
-
-        var total = await db.TruckLoads
-            .Where(l => l.CancelledAtUtc == null && l.PouringEndedAtUtc != null && l.Pour.OrderLineId == lineId)
-            .SumAsync(l => (decimal?)l.QuantityCft, cancellationToken) ?? 0m;
-
-        if (line.DeliveredCft != total)
-        {
-            line.DeliveredCft = total;
-
-            // A new quantity means the difference has to be looked at again.
-            line.BilledCft = null;
-            line.BillingBasis = null;
-            line.BillingNote = null;
-            line.BillingResolvedBy = null;
-            //line.BillingResolvedAt = null;
-        }
-
-        if (line.Order.Status == OrderStatus.Confirmed && total > 0)
-        {
-            line.Order.Status = OrderStatus.InProgress;
-        }
-
-        audit.Record(line.Order.TenantId, "order.delivered_from_loads", "Order", line.Order.Id.ToString(), new { lineId, total });
-        await db.SaveChangesAsync(cancellationToken);
-    }
 
     private async Task<ActionResult<ShiftProductionDto>> BuildAsync(Guid planId, CancellationToken cancellationToken)
     {
@@ -405,6 +456,9 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
         var pourIds = pours.Select(p => p.Id).ToList();
         var loads = await db.TruckLoads.AsNoTracking().Where(l => pourIds.Contains(l.PourId))
             .OrderBy(l => l.Number).ToListAsync(cancellationToken);
+        var loadIds = loads.Select(l => l.Id).ToList();
+        var returns = await db.ReturnedConcretes.AsNoTracking().Where(r => loadIds.Contains(r.SourceLoadId))
+            .ToListAsync(cancellationToken);
 
         // Each pour shows the survey its order tagged, or else the site's latest.
         var tagged = pours.Where(p => p.Tagged != null).Select(p => p.Tagged!.Value).Distinct().ToList();
@@ -432,9 +486,9 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
         var items = pours.Select(p =>
         {
             var mine = loads.Where(l => l.PourId == p.Id).ToList();
-            var live = mine.Where(l => l.CancelledAtUtc is null).ToList();
+            var live = mine.Where(l => l.CancelledAtUtc is null && l.RejectedAtUtc is null).ToList();
             var producedCft = live.Sum(l => l.QuantityCft);
-            var deliveredCft = live.Where(l => l.PouringEndedAtUtc is not null).Sum(l => l.QuantityCft);
+            var deliveredCft = mine.Sum(l => DeliveredQuantity.Contribution(l, returns.FirstOrDefault(r => r.SourceLoadId == l.Id)));
 
             var survey = p.Tagged is { } id
                 ? surveys.FirstOrDefault(s => s.Id == id)
@@ -490,14 +544,15 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
     private ObjectResult Fail(int status, string title) => Problem(title: title, statusCode: status);
 
     private static LoadDto ToDto(TruckLoad l) => new(
-        l.Id, l.PourId, l.Number, l.TruckId, l.QuantityCft, l.QuantityReason,
-        l.CancelledAtUtc is not null ? "Cancelled"
-        : l.ReturnedAtUtc is not null ? "Returned"
-        : l.PouringEndedAtUtc is not null ? "Poured"
-        : l.PouringStartedAtUtc is not null ? "Pouring"
-        : l.ArrivedAtUtc is not null ? "AtSite"
-        : l.DispatchedAtUtc is not null ? "OnTheRoad"
-        : "Produced",
-        l.ProducedAtUtc, l.DispatchedAtUtc, l.ArrivedAtUtc, l.PouringStartedAtUtc, l.PouringEndedAtUtc,
-        l.ReturnedAtUtc, l.CancelledAtUtc, l.CancelReason);
+     l.Id, l.PourId, l.Number, l.TruckId, l.QuantityCft, l.QuantityReason,
+     l.CancelledAtUtc is not null ? "Cancelled"
+     : l.RejectedAtUtc is not null ? "Rejected"
+     : l.ReturnedAtUtc is not null ? "Returned"
+     : l.PouringEndedAtUtc is not null ? "Poured"
+     : l.PouringStartedAtUtc is not null ? "Pouring"
+     : l.ArrivedAtUtc is not null ? "AtSite"
+     : l.DispatchedAtUtc is not null ? "OnTheRoad"
+     : "Produced",
+     l.ProducedAtUtc, l.DispatchedAtUtc, l.ArrivedAtUtc, l.PouringStartedAtUtc, l.PouringEndedAtUtc,
+     l.ReturnedAtUtc, l.CancelledAtUtc, l.CancelReason, l.ReturnedCft, l.RejectedAtUtc, l.RejectReason, l.SourceReturnId);
 }
