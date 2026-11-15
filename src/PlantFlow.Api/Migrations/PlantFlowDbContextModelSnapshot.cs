@@ -2155,6 +2155,9 @@ namespace PlantFlow.Api.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("LateThresholdMinutes")
+                        .HasColumnType("int");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -2199,6 +2202,9 @@ namespace PlantFlow.Api.Migrations
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("UtcOffsetMinutes")
+                        .HasColumnType("int");
 
                     b.Property<bool>("VatOnConcrete")
                         .HasColumnType("bit");

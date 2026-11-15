@@ -12,7 +12,7 @@ namespace PlantFlow.Api.Controllers;
 public record TenantSettingsDto(
     string Name, string Slug, VolumeUnit VolumeUnit, decimal? PumpFreeAboveCft,
     SurveyRequirement RequireSurveyBeforePlanning, int PumpRestShifts,
-    bool RequireCreditApproval, bool VatOnConcrete, int AverageSpeedKmh, int PumpAssemblyMinutes, decimal TruckLoadCft);
+    bool RequireCreditApproval, bool VatOnConcrete, int AverageSpeedKmh, int PumpAssemblyMinutes, decimal TruckLoadCft, int LateThresholdMinutes, int UtcOffsetMinutes);
 
 // What every signed-in user needs to display things. Nothing commercial.
 public record PublicSettingsDto(string Name, VolumeUnit VolumeUnit);
@@ -54,6 +54,13 @@ public class TenantSettingsRequest
     // Used for the estimate of truck loads in a plan.
     [Range(1.0, 100000.0)]
     public decimal TruckLoadCft { get; init; } = 100m;
+
+    // Leave out to keep the current value.
+    [Range(0, 1440)]
+    public int? LateThresholdMinutes { get; init; }
+
+    [Range(-720, 840)]
+    public int? UtcOffsetMinutes { get; init; }
 }
 
 [ApiController]
@@ -61,7 +68,7 @@ public class TenantSettingsRequest
 public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
     private static TenantSettingsDto ToDto(Tenant t) => new(
-        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete, t.AverageSpeedKmh, t.PumpAssemblyMinutes, t.TruckLoadCft);
+        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete, t.AverageSpeedKmh, t.PumpAssemblyMinutes, t.TruckLoadCft, t.LateThresholdMinutes, t.UtcOffsetMinutes);
 
     [HttpGet]
     [HasPermission(Permissions.SettingsManage)]
@@ -102,6 +109,8 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
         tenant.VatOnConcrete = request.VatOnConcrete;
         tenant.AverageSpeedKmh = request.AverageSpeedKmh;
         tenant.PumpAssemblyMinutes = request.PumpAssemblyMinutes;
+        if (request.LateThresholdMinutes is { } late) tenant.LateThresholdMinutes = late;
+        if (request.UtcOffsetMinutes is { } offset) tenant.UtcOffsetMinutes = offset;
         tenant.TruckLoadCft = request.TruckLoadCft;
 
         audit.Record(tenant.Id, "tenant.settings_changed", "Tenant", tenant.Id.ToString(),
@@ -111,7 +120,9 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
                 After = ToDto(tenant),
                 VatOnConcreteChanged = before.VatOnConcrete != tenant.VatOnConcrete,
                 PumpAssemblyMinutesChanged = before.PumpAssemblyMinutes != tenant.PumpAssemblyMinutes,
-                TruckLoadCftChanged = before.TruckLoadCft != tenant.TruckLoadCft
+                TruckLoadCftChanged = before.TruckLoadCft != tenant.TruckLoadCft,
+                tenant.LateThresholdMinutes,
+                tenant.UtcOffsetMinutes
             });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
