@@ -8,7 +8,7 @@ using static PlantFlow.Tests.Integration.TestData;
 namespace PlantFlow.Tests.Integration;
 
 [Collection("api")]
-public class PourPlanningTests(ApiFactory factory)
+public partial class PourPlanningTests(ApiFactory factory)
 {
     // One plant with three shifts, two pumps and a confirmed order with a pumped line (500 CFT) and a chute line (100 CFT).
     // The site is surveyed OK unless asked otherwise. The order is 5 km from the plant.
