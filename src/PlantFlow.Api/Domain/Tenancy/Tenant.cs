@@ -31,4 +31,10 @@ public class Tenant : AuditableEntity
 
     // Used only for the estimate of truck loads in a plan.
     public decimal TruckLoadCft { get; set; } = 100m;
+
+    // A pour step more than this many minutes behind plan is flagged late on the live board.
+    public int LateThresholdMinutes { get; set; } = 15;
+
+    // The plants' local time as minutes from UTC (Dhaka is +360). Shift and pour times are local.
+    public int UtcOffsetMinutes { get; set; } = 360;
 }
