@@ -40,6 +40,8 @@ public partial class PourPlanningTests
 
         // Pour A: planned for 09:00 plant time, which is 03:00 UTC. It did start, but days after the plan.
         var a = plan.Pours.Single(p => p.PourId == s.PourA);
+        Assert.False(string.IsNullOrWhiteSpace(a.CustomerName));
+        Assert.Equal("Tower A", a.SiteName);
         Assert.Equal(new DateTime(2026, 6, 1, 3, 0, 0, DateTimeKind.Utc), a.PourStart!.PlannedUtc);
         Assert.NotNull(a.PourStart.ActualUtc);
         Assert.True(a.PourStart.Late);

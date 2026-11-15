@@ -22,7 +22,7 @@ public record LivePourDto(
     Guid PourId, Guid OrderId, Guid? PumpId, decimal PlannedCft, DateTime PlannedStart,
     decimal ProducedCft, decimal RemainingCft, decimal DeliveredCft, LoadCountsDto Loads,
     DateTime? PumpArrivedAtUtc, StepDelayDto? PumpDispatch, StepDelayDto? PumpReady, StepDelayDto? FirstTruck,
-    StepDelayDto? PourStart, bool Late);
+    StepDelayDto? PourStart, bool Late, string CustomerName, string SiteName);
 
 public record LivePlanDto(
     Guid PlanId, Guid PlantId, string PlantName, Guid ShiftId, string ShiftName, ShiftPlanStatus Status,
@@ -90,6 +90,8 @@ public class DashboardsController(PlantFlowDbContext db, ICurrentUser currentUse
                 p.PumpId,
                 p.PlannedCft,
                 p.PlannedStart,
+                p.OrderLine.Order.CustomerId,
+                p.OrderLine.Order.SiteId,
                 p.PumpLeaveAt,
                 p.FirstTruckLeaveAt,
                 p.PumpDispatchedAtUtc,
@@ -97,7 +99,12 @@ public class DashboardsController(PlantFlowDbContext db, ICurrentUser currentUse
                 p.PumpAssembledAtUtc
             }).ToListAsync(cancellationToken);
         var pourIds = pours.Select(p => p.Id).ToList();
-
+        var siteIds = pours.Select(p => p.SiteId).Distinct().ToList();
+        var customerIds = pours.Select(p => p.CustomerId).Distinct().ToList();
+        var siteNames = await db.Sites.AsNoTracking().Where(s => siteIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
+        var customerNames = await db.Customers.AsNoTracking().Where(c => customerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
         var loads = await db.TruckLoads.AsNoTracking().Where(l => pourIds.Contains(l.PourId)).ToListAsync(cancellationToken);
         var loadIds = loads.Select(l => l.Id).ToList();
         var records = await db.ReturnedConcretes.AsNoTracking().Where(r => loadIds.Contains(r.SourceLoadId))
@@ -139,7 +146,8 @@ public class DashboardsController(PlantFlowDbContext db, ICurrentUser currentUse
 
                 return new LivePourDto(
                     p.Id, p.OrderId, p.PumpId, p.PlannedCft, p.PlannedStart, produced, p.PlannedCft - produced, delivered,
-                    Count(mine), p.PumpArrivedAtUtc, pumpDispatch, pumpReady, firstTruck, pourStart, late);
+                    Count(mine), p.PumpArrivedAtUtc, pumpDispatch, pumpReady, firstTruck, pourStart, late,
+                    customerNames.GetValueOrDefault(p.CustomerId) ?? "", siteNames.GetValueOrDefault(p.SiteId) ?? "");
             }).ToList();
 
             var planLoads = livePours.Count == 0 ? [] : pours.Where(p => p.ShiftPlanId == plan.Id)
