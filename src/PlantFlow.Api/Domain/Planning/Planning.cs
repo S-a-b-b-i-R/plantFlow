@@ -130,4 +130,50 @@ public class Pour : ITenantOwned
     public string? RestOverrideReason { get; set; }
 
     public string? Notes { get; set; }
+
+    // Pump timestamps recorded by operations (UTC).
+    public DateTime? PumpDispatchedAtUtc { get; set; }
+    public DateTime? PumpArrivedAtUtc { get; set; }
+    public DateTime? PumpAssembledAtUtc { get; set; }
+}
+
+public enum LoadStep { Arrived, PouringStarted, PouringEnded, Returned }
+
+public enum PumpStep { Dispatched, Arrived, Assembled }
+
+// One truck carrying part of a pour. Produced by the batching operator, then followed to the site and back.
+// All times are UTC.
+public class TruckLoad : ITenantOwned
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public Guid TenantId { get; set; }
+
+    public Guid PourId { get; set; }
+    public Pour Pour { get; set; } = null!;
+
+    // The truck, as a vehicle.
+    public Guid TruckId { get; set; }
+    public Vehicle Truck { get; set; } = null!;
+
+    // 1, 2, 3 ... within the pour. Cancelled loads keep their number.
+    public int Number { get; set; }
+
+    public decimal QuantityCft { get; set; }
+
+    // Why the load is smaller than usual, or the plant manager's reason for going over plan.
+    public string? QuantityReason { get; set; }
+
+    public DateTime ProducedAtUtc { get; set; } = DateTime.UtcNow;
+    public Guid? ProducedBy { get; set; }
+
+    public DateTime? DispatchedAtUtc { get; set; }
+    public Guid? DispatchedBy { get; set; }
+
+    public DateTime? ArrivedAtUtc { get; set; }
+    public DateTime? PouringStartedAtUtc { get; set; }
+    public DateTime? PouringEndedAtUtc { get; set; }
+    public DateTime? ReturnedAtUtc { get; set; }
+
+    public DateTime? CancelledAtUtc { get; set; }
+    public string? CancelReason { get; set; }
 }
