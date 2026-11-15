@@ -108,9 +108,36 @@ public class TruckLoadConfiguration : IEntityTypeConfiguration<TruckLoad>
         builder.Property(l => l.CancelReason).HasMaxLength(300);
         builder.HasIndex(l => l.PourId);
         builder.HasIndex(l => l.TruckId);
+        builder.Property(l => l.ReturnedCft).HasPrecision(10, 2);
+        builder.Property(l => l.RejectReason).HasMaxLength(300);
+        builder.HasIndex(l => l.SourceReturnId);
 
+        builder.HasOne<ReturnedConcrete>().WithMany().HasForeignKey(l => l.SourceReturnId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(l => l.Pour).WithMany().HasForeignKey(l => l.PourId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(l => l.Truck).WithMany().HasForeignKey(l => l.TruckId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Tenant>().WithMany().HasForeignKey(l => l.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class ReturnedConcreteConfiguration : IEntityTypeConfiguration<ReturnedConcrete>
+{
+    public void Configure(EntityTypeBuilder<ReturnedConcrete> builder)
+    {
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Kind).HasConversion<string>().HasMaxLength(20);
+        builder.Property(r => r.Fault).HasConversion<string>().HasMaxLength(20);
+        builder.Property(r => r.Status).HasConversion<string>().HasMaxLength(30);
+        builder.Property(r => r.Reason).HasMaxLength(300).IsRequired();
+        builder.Property(r => r.Note).HasMaxLength(300);
+        builder.Property(r => r.QuantityCft).HasPrecision(10, 2);
+        builder.Property(r => r.RemainingCft).HasPrecision(10, 2);
+        builder.Property(r => r.DumpedCft).HasPrecision(10, 2);
+        builder.HasIndex(r => new { r.ShiftPlanId, r.Status });
+        builder.HasIndex(r => r.SourceLoadId).IsUnique();
+
+        builder.HasOne(r => r.Plant).WithMany().HasForeignKey(r => r.PlantId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(r => r.ShiftPlan).WithMany().HasForeignKey(r => r.ShiftPlanId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(r => r.SourceLoad).WithMany().HasForeignKey(r => r.SourceLoadId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(r => r.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }

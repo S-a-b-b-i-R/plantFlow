@@ -176,4 +176,64 @@ public class TruckLoad : ITenantOwned
 
     public DateTime? CancelledAtUtc { get; set; }
     public string? CancelReason { get; set; }
+
+    // The part of the load that came back after pouring. The return itself is in ReturnedConcrete.
+    public decimal ReturnedCft { get; set; }
+
+    // Set when the whole load was refused before pouring started.
+    public DateTime? RejectedAtUtc { get; set; }
+    public string? RejectReason { get; set; }
+
+    // The returned concrete this load was made from, if any.
+    public Guid? SourceReturnId { get; set; }
+}
+
+public enum ReturnKind { PartLoad, RejectedAtSite, RejectedAtPlant }
+
+public enum ReturnFault { Company, Customer }
+
+public enum ReturnStatus { AwaitingInspection, Reusable, NeedsTreatment, Treated, Used, Dumped }
+
+public enum ReturnDecision { Reusable, NeedsTreatment, Treated, Dumped }
+
+// Concrete that came back to the plant. It is inspected, then reused, treated or dumped.
+public class ReturnedConcrete : ITenantOwned
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public Guid TenantId { get; set; }
+
+    public Guid PlantId { get; set; }
+    public Plant Plant { get; set; } = null!;
+
+    // The shift it came from. Reuse is limited to the same shift.
+    public Guid ShiftPlanId { get; set; }
+    public ShiftPlan ShiftPlan { get; set; } = null!;
+
+    public Guid ProductId { get; set; }
+
+    // The load it came from. A load has at most one return.
+    public Guid SourceLoadId { get; set; }
+    public TruckLoad SourceLoad { get; set; } = null!;
+
+    public ReturnKind Kind { get; set; }
+    public ReturnFault Fault { get; set; }
+    public string Reason { get; set; } = "";
+
+    public decimal QuantityCft { get; set; }
+
+    // What has not been used or dumped yet.
+    public decimal RemainingCft { get; set; }
+
+    // What was dumped. A customer-fault dump is billed to the customer.
+    public decimal DumpedCft { get; set; }
+
+    public ReturnStatus Status { get; set; } = ReturnStatus.AwaitingInspection;
+
+    // The note from the latest decision.
+    public string? Note { get; set; }
+
+    public Guid? CreatedBy { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public Guid? DecidedBy { get; set; }
+    public DateTime? DecidedAtUtc { get; set; }
 }

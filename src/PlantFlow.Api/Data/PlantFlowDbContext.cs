@@ -67,6 +67,7 @@ public class PlantFlowDbContext : DbContext
     public DbSet<Pour> Pours => Set<Pour>();
     public DbSet<SiteSurveyImage> SiteSurveyImages => Set<SiteSurveyImage>();
     public DbSet<TruckLoad> TruckLoads => Set<TruckLoad>();
+    public DbSet<ReturnedConcrete> ReturnedConcretes => Set<ReturnedConcrete>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PlantFlowDbContext).Assembly);
