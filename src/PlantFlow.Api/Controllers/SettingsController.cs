@@ -121,8 +121,8 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
                 VatOnConcreteChanged = before.VatOnConcrete != tenant.VatOnConcrete,
                 PumpAssemblyMinutesChanged = before.PumpAssemblyMinutes != tenant.PumpAssemblyMinutes,
                 TruckLoadCftChanged = before.TruckLoadCft != tenant.TruckLoadCft,
-                tenant.LateThresholdMinutes,
-                tenant.UtcOffsetMinutes
+                LateThresholdMinutesChanged = before.LateThresholdMinutes != tenant.LateThresholdMinutes,
+                UtcOffsetMinutesChanged = before.UtcOffsetMinutes != tenant.UtcOffsetMinutes
             });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
