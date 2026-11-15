@@ -1,14 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
-import { FullScreen } from "@/components/FullScreen";
+import { AuthLayout } from "@/components/AuthLayout";
 import { useAuth } from "@/auth/auth-context";
+import { FcGoogle } from "react-icons/fc";
 
 export function SignIn() {
     const { signInWithGoogle } = useAuth();
@@ -27,7 +21,11 @@ export function SignIn() {
                 code !== "auth/popup-closed-by-user" &&
                 code !== "auth/cancelled-popup-request"
             ) {
-                setError(e instanceof Error ? e.message : "Sign-in failed.");
+                setError(
+                    e instanceof Error
+                        ? e.message
+                        : "Sign-in failed. Try again.",
+                );
             }
         } finally {
             setBusy(false);
@@ -35,31 +33,27 @@ export function SignIn() {
     }
 
     return (
-        <FullScreen>
-            <Card className="w-full max-w-sm">
-                <CardHeader>
-                    <CardTitle className="text-2xl">PlantFlow</CardTitle>
-                    <CardDescription>
-                        Ready-mix operations, from order to invoice.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                    <Button
-                        className="w-full"
-                        onClick={handleSignIn}
-                        disabled={busy}
-                    >
-                        {busy ? "Opening Google…" : "Sign in with Google"}
-                    </Button>
-                    {error && (
-                        <p className="text-sm text-destructive">{error}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                        New accounts wait for an administrator to approve them
-                        before they can use the app.
-                    </p>
-                </CardContent>
-            </Card>
-        </FullScreen>
+        <AuthLayout>
+            <h1 className="display text-5xl">Sign in</h1>
+            <p className="mt-3 text-muted-foreground">
+                Use your Google account. A new account is approved by an
+                administrator before it can open the app.
+            </p>
+            <Button
+                variant="outline"
+                size="lg"
+                className="mt-8 h-12 w-full gap-3 border-foreground/25 bg-card text-base font-medium hover:bg-card hover:border-foreground/60 hover:cursor-pointer"
+                onClick={handleSignIn}
+                disabled={busy}
+            >
+                <FcGoogle className="size-5" aria-hidden="true" />
+                {busy ? "Opening Google…" : "Continue with Google"}
+            </Button>
+            {error && (
+                <p role="alert" className="mt-4 text-sm text-destructive">
+                    {error}
+                </p>
+            )}
+        </AuthLayout>
     );
 }

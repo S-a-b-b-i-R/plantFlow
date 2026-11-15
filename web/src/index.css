@@ -1,1 +1,101 @@
 @import "tailwindcss";
+
+:root {
+  --background: #e4e6e2;
+  --foreground: #1b2a31;
+  --card: #f2f3f0;
+  --card-foreground: #1b2a31;
+  --popover: #f2f3f0;
+  --popover-foreground: #1b2a31;
+  --primary: #1b2a31;
+  --primary-foreground: #f2f3f0;
+  --secondary: #d5d9d4;
+  --secondary-foreground: #1b2a31;
+  --muted: #d5d9d4;
+  --muted-foreground: #556268;
+  --accent: #d5d9d4;
+  --accent-foreground: #1b2a31;
+  --destructive: #a8392b;
+  --border: #c6cbc5;
+  --input: #c6cbc5;
+  --ring: #1b2a31;
+  --radius: 0.375rem;
+
+  --ink: #1b2a31;
+  --signal: #f4c20d;
+  --late: #a8392b;
+  --ok: #2f7d5c;
+  --chrome: #1b2a31;
+  --chrome-foreground: #e8ece8;
+}
+
+.dark {
+  --background: #11181c;
+  --foreground: #e6e9e5;
+  --card: #1a2328;
+  --card-foreground: #e6e9e5;
+  --popover: #1a2328;
+  --popover-foreground: #e6e9e5;
+  --primary: #f4c20d;
+  --primary-foreground: #1b2a31;
+  --secondary: #26323a;
+  --secondary-foreground: #e6e9e5;
+  --muted: #26323a;
+  --muted-foreground: #93a0a5;
+  --accent: #26323a;
+  --accent-foreground: #e6e9e5;
+  --destructive: #e0705f;
+  --border: #2b383f;
+  --input: #2b383f;
+  --ring: #f4c20d;
+
+  --late: #e0705f;
+  --ok: #4fb58a;
+  --chrome: #0b1013;
+  --chrome-foreground: #e8ece8;
+}
+
+@theme inline {
+  --font-sans: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  --color-ink: var(--ink);
+  --color-signal: var(--signal);
+  --color-late: var(--late);
+  --color-ok: var(--ok);
+  --color-chrome: var(--chrome);
+  --color-chrome-foreground: var(--chrome-foreground);
+}
+
+@layer components {
+
+  /* Headlines: Archivo at its condensed width, like road signage. */
+  .display {
+    font-stretch: 68%;
+    font-weight: 750;
+    letter-spacing: -0.005em;
+  }
+}
+
+/* The one decorative motion: the Now line sweeping in on the sign-in screens. */
+@keyframes sweep {
+  from {
+    transform: translateX(-210px);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .motif-now {
+    animation: sweep 1.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+}
+
+@layer base {
+
+  html,
+  body {
+    overflow-x: clip;
+  }
+}
