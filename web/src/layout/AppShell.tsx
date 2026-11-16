@@ -4,7 +4,7 @@ import { Mark } from "@/components/Mark";
 import { useAuth } from "@/auth/auth-context";
 import { can, PERMISSIONS } from "@/auth/permissions";
 import { useMe } from "@/auth/useMe";
-import { LuActivity, LuLogOut } from "react-icons/lu";
+import { LuActivity, LuLogOut, LuTruck } from "react-icons/lu";
 
 // What appears in the navigation, and the permission that shows it.
 const navigation = [
@@ -13,6 +13,12 @@ const navigation = [
         label: "Live operations",
         icon: LuActivity,
         permission: PERMISSIONS.dashboardsView,
+    },
+    {
+        to: "/operator",
+        label: "Batching",
+        icon: LuTruck,
+        permission: PERMISSIONS.batchesManage,
     },
 ];
 

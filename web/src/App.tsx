@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Gate } from "@/auth/Gate";
 import { AppShell } from "@/layout/AppShell";
 import { LiveBoard } from "@/pages/LiveBoard";
+import { Operator } from "@/pages/Operator";
 
 export default function App() {
     return (
@@ -14,6 +15,7 @@ export default function App() {
                         path="*"
                         element={<p className="text-sm">Page not found.</p>}
                     />
+                    <Route path="operator" element={<Operator />} />
                 </Route>
             </Route>
         </Routes>
