@@ -77,3 +77,63 @@ export interface LiveDashboard {
     latePours: number;
     plans: LivePlan[];
 }
+
+export interface OperatorLoad {
+    id: string;
+    pourId: string;
+    number: number;
+    truckId: string;
+    quantityCft: number;
+    quantityReason: string | null;
+    stage: string;
+    producedAtUtc: string;
+    dispatchedAtUtc: string | null;
+    arrivedAtUtc: string | null;
+    pouringStartedAtUtc: string | null;
+    pouringEndedAtUtc: string | null;
+    returnedAtUtc: string | null;
+    cancelledAtUtc: string | null;
+    cancelReason: string | null;
+    returnedCft: number;
+    rejectedAtUtc: string | null;
+    rejectReason: string | null;
+    sourceReturnId: string | null;
+}
+
+export interface OperatorPour {
+    pourId: string;
+    orderId: string;
+    orderLineId: string;
+    siteId: string;
+    plannedCft: number;
+    plannedStart: string;
+    pumpId: string | null;
+    pumpDispatchedAtUtc: string | null;
+    pumpArrivedAtUtc: string | null;
+    pumpAssembledAtUtc: string | null;
+    producedCft: number;
+    remainingCft: number;
+    deliveredCft: number;
+    loads: OperatorLoad[];
+}
+
+export interface ShiftProduction {
+    planId: string;
+    plantId: string;
+    date: string;
+    shiftId: string;
+    status: "Draft" | "Submitted" | "Approved";
+    plannedCft: number;
+    producedCft: number;
+    remainingCft: number;
+    deliveredCft: number;
+    pours: OperatorPour[];
+}
+
+export interface TruckOption {
+    id: string;
+    code: string;
+    plateNumber: string | null;
+    capacityCft: number;
+    busy: boolean;
+}

@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PlantFlow.Api.Data;
+using PlantFlow.Api.Domain.MasterData;
 using PlantFlow.Api.Domain.Orders;
 using PlantFlow.Api.Domain.Planning;
 using PlantFlow.Api.Domain.Security;
@@ -29,6 +30,8 @@ public record PourProductionDto(
 public record ShiftProductionDto(
     Guid PlanId, Guid PlantId, DateOnly Date, Guid ShiftId, ShiftPlanStatus Status,
     decimal PlannedCft, decimal ProducedCft, decimal RemainingCft, decimal DeliveredCft, List<PourProductionDto> Pours);
+
+public record TruckOptionDto(Guid Id, string Code, string? PlateNumber, decimal CapacityCft, bool Busy);
 
 public class ProduceRequest
 {
@@ -91,6 +94,32 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
     [HasPermission(Permissions.BatchesManage)]
     public Task<ActionResult<ShiftProductionDto>> Operator(Guid planId, CancellationToken cancellationToken) =>
         BuildAsync(planId, cancellationToken);
+
+    // The mixers at the plan's plant, with the size of a usual load and whether the truck is still out.
+    [HttpGet("api/shift-plans/{planId:guid}/trucks")]
+    [HasPermission(Permissions.BatchesManage)]
+    public async Task<ActionResult<List<TruckOptionDto>>> Trucks(Guid planId, CancellationToken cancellationToken)
+    {
+        var plantId = await db.ShiftPlans.AsNoTracking().Where(p => p.Id == planId)
+            .Select(p => (Guid?)p.PlantId).FirstOrDefaultAsync(cancellationToken);
+        if (plantId is null) return NotFound();
+
+        var usual = await db.Tenants.AsNoTracking().Where(t => t.Id == currentUser.TenantId)
+            .Select(t => t.TruckLoadCft).FirstAsync(cancellationToken);
+
+        var out_ = await db.TruckLoads.AsNoTracking()
+            .Where(l => l.CancelledAtUtc == null && l.ReturnedAtUtc == null)
+            .Select(l => l.TruckId).Distinct().ToListAsync(cancellationToken);
+
+        var trucks = await db.Vehicles.AsNoTracking()
+            .Where(v => v.PlantId == plantId && v.Type == VehicleType.TransitMixer && v.Status == VehicleStatus.Available)
+            .OrderBy(v => v.Code)
+            .Select(v => new { v.Id, v.Code, v.PlateNumber, v.CapacityCft })
+            .ToListAsync(cancellationToken);
+
+        return trucks.Select(v => new TruckOptionDto(
+            v.Id, v.Code, v.PlateNumber, v.CapacityCft ?? usual, out_.Contains(v.Id))).ToList();
+    }
 
     // Operations' dashboard: the same data with every timestamp.
     [HttpGet("api/shift-plans/{planId:guid}/dashboard")]
