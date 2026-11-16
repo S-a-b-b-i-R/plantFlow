@@ -238,6 +238,15 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
             return ToDto(load);
         }
         if (load.CancelledAtUtc is not null) return Fail(StatusCodes.Status409Conflict, "This load was cancelled.");
+        if (request.Step == LoadStep.PouringStarted)
+        {
+            var pump = await db.Pours.AsNoTracking().Where(p => p.Id == load.PourId)
+                .Select(p => new { p.PumpId, p.PumpAssembledAtUtc }).FirstAsync(cancellationToken);
+            if (pump.PumpId is not null && pump.PumpAssembledAtUtc is null)
+            {
+                return Fail(StatusCodes.Status409Conflict, "The pump is not ready yet, so pouring cannot start.");
+            }
+        }
         if (load.DispatchedAtUtc is null) return Fail(StatusCodes.Status409Conflict, "Dispatch the load first.");
 
         if (Resolve(request.At) is not { } at) return Fail(StatusCodes.Status400BadRequest, "The time cannot be in the future.");

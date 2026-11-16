@@ -97,6 +97,10 @@ public partial class PourPlanningTests
         Assert.Equal(HttpStatusCode.BadRequest, (await Step(admin, first.Id, "Arrived", now.AddMinutes(-30))).StatusCode);
 
         Assert.Equal(HttpStatusCode.OK, (await Step(admin, first.Id, "Arrived", now.AddMinutes(1))).StatusCode);
+
+        // Pouring cannot start before the pump is ready.
+        Assert.Equal(HttpStatusCode.Conflict, (await Step(admin, first.Id, "PouringStarted", now.AddMinutes(2))).StatusCode);
+        await PumpReadyAsync(admin, s.PourId);
         Assert.Equal(HttpStatusCode.OK, (await Step(admin, first.Id, "PouringStarted", now.AddMinutes(2))).StatusCode);
 
         // A cancel is no longer possible once pouring has started.
