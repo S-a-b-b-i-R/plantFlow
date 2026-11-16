@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { OpButton as Button } from "./OpButton";
 import { cft } from "@/lib/format";
 import { faultLabel, kindLabel, returnStatusLabel } from "@/lib/operator";
 import type { ReturnedConcrete } from "@/lib/types";
@@ -140,6 +140,7 @@ function ReturnRow({
                         {canDump && (
                             <Button
                                 variant="outline"
+                                tone="danger"
                                 className="h-12 px-5 text-base"
                                 disabled={act.isPending}
                                 onClick={() => setDumping(true)}
@@ -166,6 +167,7 @@ function ReturnRow({
                     <div className="mt-3 flex flex-wrap gap-2">
                         <Button
                             className="h-12 px-5 text-base"
+                            tone="danger"
                             disabled={note.trim().length < 3 || act.isPending}
                             onClick={() => decide("Dumped", note.trim())}
                         >
