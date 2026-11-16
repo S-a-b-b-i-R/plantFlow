@@ -37,4 +37,7 @@ public class Tenant : AuditableEntity
 
     // The plants' local time as minutes from UTC (Dhaka is +360). Shift and pour times are local.
     public int UtcOffsetMinutes { get; set; } = 360;
+
+    // How long after pouring ends a part return can be recorded without a plant manager.
+    public int ReturnWindowMinutes { get; set; } = 120;
 }

@@ -12,7 +12,7 @@ namespace PlantFlow.Api.Controllers;
 public record TenantSettingsDto(
     string Name, string Slug, VolumeUnit VolumeUnit, decimal? PumpFreeAboveCft,
     SurveyRequirement RequireSurveyBeforePlanning, int PumpRestShifts,
-    bool RequireCreditApproval, bool VatOnConcrete, int AverageSpeedKmh, int PumpAssemblyMinutes, decimal TruckLoadCft, int LateThresholdMinutes, int UtcOffsetMinutes);
+    bool RequireCreditApproval, bool VatOnConcrete, int AverageSpeedKmh, int PumpAssemblyMinutes, decimal TruckLoadCft, int LateThresholdMinutes, int UtcOffsetMinutes, int ReturnWindowMinutes);
 
 // What every signed-in user needs to display things. Nothing commercial.
 public record PublicSettingsDto(string Name, VolumeUnit VolumeUnit);
@@ -61,6 +61,9 @@ public class TenantSettingsRequest
 
     [Range(-720, 840)]
     public int? UtcOffsetMinutes { get; init; }
+
+    [Range(0, 1440)]
+    public int? ReturnWindowMinutes { get; init; }
 }
 
 [ApiController]
@@ -68,7 +71,7 @@ public class TenantSettingsRequest
 public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
     private static TenantSettingsDto ToDto(Tenant t) => new(
-        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete, t.AverageSpeedKmh, t.PumpAssemblyMinutes, t.TruckLoadCft, t.LateThresholdMinutes, t.UtcOffsetMinutes);
+        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete, t.AverageSpeedKmh, t.PumpAssemblyMinutes, t.TruckLoadCft, t.LateThresholdMinutes, t.UtcOffsetMinutes, t.ReturnWindowMinutes);
 
     [HttpGet]
     [HasPermission(Permissions.SettingsManage)]
@@ -111,6 +114,7 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
         tenant.PumpAssemblyMinutes = request.PumpAssemblyMinutes;
         if (request.LateThresholdMinutes is { } late) tenant.LateThresholdMinutes = late;
         if (request.UtcOffsetMinutes is { } offset) tenant.UtcOffsetMinutes = offset;
+        if (request.ReturnWindowMinutes is { } returnWindow) tenant.ReturnWindowMinutes = returnWindow;
         tenant.TruckLoadCft = request.TruckLoadCft;
 
         audit.Record(tenant.Id, "tenant.settings_changed", "Tenant", tenant.Id.ToString(),
@@ -122,7 +126,8 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
                 PumpAssemblyMinutesChanged = before.PumpAssemblyMinutes != tenant.PumpAssemblyMinutes,
                 TruckLoadCftChanged = before.TruckLoadCft != tenant.TruckLoadCft,
                 LateThresholdMinutesChanged = before.LateThresholdMinutes != tenant.LateThresholdMinutes,
-                UtcOffsetMinutesChanged = before.UtcOffsetMinutes != tenant.UtcOffsetMinutes
+                UtcOffsetMinutesChanged = before.UtcOffsetMinutes != tenant.UtcOffsetMinutes,
+                ReturnWindowMinutesChanged = before.ReturnWindowMinutes != tenant.ReturnWindowMinutes
             });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { LuCheck } from "react-icons/lu";
-import { Button } from "@/components/ui/button";
+import { OpButton as Button } from "./OpButton";
 import { cft, plantTime } from "@/lib/format";
 import {
     isOut,
@@ -8,6 +8,7 @@ import {
     loadState,
     minutesSince,
     pumpAction,
+    returnMinutesLeft,
     stateLabel,
     stateSince,
 } from "@/lib/operator";
@@ -24,7 +25,15 @@ import { MakeLoad } from "./MakeLoad";
 import { useAct } from "./useAct";
 
 const primary =
-    "h-12 bg-signal px-5 text-base font-semibold text-ink hover:bg-signal/90";
+    "h-12 bg-signal px-5 text-base font-semibold text-ink hover:bg-signal";
+
+interface Context {
+    canTrack: boolean;
+    canReturns: boolean;
+    canOverride: boolean;
+    returnWindow: number;
+    now: number;
+}
 
 export function PourCard({
     live,
@@ -35,6 +44,7 @@ export function PourCard({
     canTrack,
     canReturns,
     canOverride,
+    returnWindow,
 }: {
     live: LivePour;
     production: OperatorPour;
@@ -44,8 +54,16 @@ export function PourCard({
     canTrack: boolean;
     canReturns: boolean;
     canOverride: boolean;
+    returnWindow: number;
 }) {
     const act = useAct();
+    const context: Context = {
+        canTrack,
+        canReturns,
+        canOverride,
+        returnWindow,
+        now,
+    };
     const truckName = (id: string) =>
         trucks.find((t) => t.id === id)?.code ?? "Truck";
 
@@ -169,9 +187,7 @@ export function PourCard({
                                 key={load.id}
                                 load={load}
                                 truck={truckName(load.truckId)}
-                                now={now}
-                                canTrack={canTrack}
-                                canReturns={canReturns}
+                                context={context}
                                 busy={act.isPending}
                                 pumpPending={
                                     !!production.pumpId &&
@@ -207,15 +223,12 @@ export function PourCard({
     );
 }
 
-function issuesFor(
-    load: OperatorLoad,
-    canReturns: boolean,
-): [IssueKind, string][] {
+function issuesFor(load: OperatorLoad, c: Context): [IssueKind, string][] {
     switch (loadState(load)) {
         case "ready":
             return [
                 ["cancel", "Cancel"],
-                ...(canReturns
+                ...(c.canReturns
                     ? ([["rejectPlant", "Reject at plant"]] as [
                           IssueKind,
                           string,
@@ -225,12 +238,16 @@ function issuesFor(
         case "road":
             return [["cancel", "Cancel"]];
         case "site":
-            return canReturns ? [["rejectSite", "Reject at site"]] : [];
+            return c.canReturns ? [["rejectSite", "Reject at site"]] : [];
         case "back":
-        case "done":
-            return canReturns && load.returnedCft === 0
-                ? [["part", "Concrete came back"]]
-                : [];
+        case "done": {
+            if (!c.canReturns || load.returnedCft > 0) return [];
+            const left = returnMinutesLeft(load, c.returnWindow, c.now);
+            if (left !== null && left > 0) {
+                return [["part", "Concrete came back"]];
+            }
+            return c.canOverride ? [["partLate", "Record a late return"]] : [];
+        }
         default:
             return [];
     }
@@ -239,18 +256,14 @@ function issuesFor(
 function LoadRow({
     load,
     truck,
-    now,
-    canTrack,
-    canReturns,
+    context,
     busy,
     pumpPending,
     onAct,
 }: {
     load: OperatorLoad;
     truck: string;
-    now: number;
-    canTrack: boolean;
-    canReturns: boolean;
+    context: Context;
     busy: boolean;
     pumpPending: boolean;
     onAct: (a: { url: string; body: Record<string, unknown> }) => void;
@@ -259,11 +272,19 @@ function LoadRow({
     const state = loadState(load);
     const action = loadAction(load);
     const since = stateSince(load);
-    const issues = issuesFor(load, canReturns);
+    const issues = issuesFor(load, context);
     // Sending a load out is the operator's job. The later steps are recorded by whoever tracks trucks.
-    const allowed = action && (state === "ready" || canTrack);
+    const allowed = action && (state === "ready" || context.canTrack);
     // A truck at a pumped pour waits for the pump before it can start pouring.
     const held = pumpPending && state === "site";
+
+    const returnOpen =
+        (state === "back" || state === "done") &&
+        context.canReturns &&
+        load.returnedCft === 0;
+    const left = returnOpen
+        ? returnMinutesLeft(load, context.returnWindow, context.now)
+        : null;
 
     return (
         <li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
@@ -282,7 +303,7 @@ function LoadRow({
                     className={`text-sm ${isOut(load) ? "" : "text-muted-foreground"}`}
                 >
                     {stateLabel[state]}
-                    {since ? `, ${minutesSince(since, now)} min` : ""}
+                    {since ? `, ${minutesSince(since, context.now)} min` : ""}
                     {load.quantityReason ? ` · ${load.quantityReason}` : ""}
                     {state === "rejected" && load.rejectReason
                         ? ` · ${load.rejectReason}`
@@ -294,6 +315,17 @@ function LoadRow({
                 {held && (
                     <p className="text-sm font-semibold text-late">
                         Waiting for the pump to be ready
+                    </p>
+                )}
+                {left !== null && left > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                        Leftover can be recorded for {left} more min
+                    </p>
+                )}
+                {left !== null && left <= 0 && state === "back" && (
+                    <p className="text-sm text-muted-foreground">
+                        The time for recording leftover has passed
+                        {context.canOverride ? "" : ". Ask a plant manager"}
                     </p>
                 )}
             </div>
@@ -308,11 +340,12 @@ function LoadRow({
             )}
 
             {issues.length > 0 && issue === null && (
-                <div className="flex basis-full flex-wrap gap-2 pl-0 sm:pl-[4.5rem]">
+                <div className="flex basis-full flex-wrap gap-2 pl-0 sm:pl-18">
                     {issues.map(([kind, label]) => (
                         <Button
                             key={kind}
                             variant="outline"
+                            tone={kind === "part" ? undefined : "danger"}
                             className="h-11 px-4"
                             onClick={() => setIssue(kind)}
                         >

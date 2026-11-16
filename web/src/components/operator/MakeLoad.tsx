@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { LuPlus, LuSearch, LuTruck, LuX } from "react-icons/lu";
-import { Button } from "@/components/ui/button";
+import { OpButton as Button } from "./OpButton";
 import { cft } from "@/lib/format";
 import { faultLabel, isUsable, kindLabel } from "@/lib/operator";
 import type { ReturnedConcrete, TruckOption } from "@/lib/types";

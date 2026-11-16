@@ -131,3 +131,15 @@ export const returnStatusLabel: Record<string, string> = {
 // Concrete that can go into a new load.
 export const isUsable = (r: ReturnedConcrete) =>
     (r.status === "Reusable" || r.status === "Treated") && r.remainingCft > 0;
+
+// Minutes left to record a part return, counted from the end of pouring. Zero or less means the window is closed.
+export function returnMinutesLeft(
+    load: OperatorLoad,
+    windowMinutes: number,
+    now: number,
+): number | null {
+    if (!load.pouringEndedAtUtc) return null;
+    return Math.ceil(
+        (utcMs(load.pouringEndedAtUtc) + windowMinutes * 60_000 - now) / 60_000,
+    );
+}

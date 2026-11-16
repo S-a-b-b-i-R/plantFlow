@@ -124,10 +124,20 @@ public class ReturnsController(PlantFlowDbContext db, ICurrentUser currentUser, 
         return Created($"api/returns/{record.Id}", ToDto(record));
     }
 
-    // Concrete left over after pouring, brought back to the plant.
+    // Leftover concrete after pouring, brought back to the plant. It has to be recorded within the company's window.
     [HttpPost("api/loads/{id:guid}/part-return")]
     [HasPermission(Permissions.ReturnsManage)]
-    public async Task<ActionResult<ReturnedConcreteDto>> PartReturn(Guid id, PartReturnRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ReturnedConcreteDto>> PartReturn(Guid id, PartReturnRequest request, CancellationToken cancellationToken) =>
+        PartReturnAsync(id, request, late: false, cancellationToken);
+
+    // After the window only a plant manager can record it. It is kept in the audit trail as late.
+    [HttpPost("api/loads/{id:guid}/part-return/late")]
+    [HasPermission(Permissions.DeliveriesPlanOverride)]
+    public Task<ActionResult<ReturnedConcreteDto>> PartReturnLate(Guid id, PartReturnRequest request, CancellationToken cancellationToken) =>
+        PartReturnAsync(id, request, late: true, cancellationToken);
+
+    private async Task<ActionResult<ReturnedConcreteDto>> PartReturnAsync(
+        Guid id, PartReturnRequest request, bool late, CancellationToken cancellationToken)
     {
         var load = await db.TruckLoads.FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
         if (load is null) return NotFound();
@@ -139,6 +149,21 @@ public class ReturnsController(PlantFlowDbContext db, ICurrentUser currentUser, 
         if (load.PouringEndedAtUtc is null)
         {
             return Fail(StatusCodes.Status409Conflict, "Pouring has to end before a part load can be returned.");
+        }
+
+        var windowMinutes = await db.Tenants.AsNoTracking().Where(t => t.Id == currentUser.TenantId)
+            .Select(t => t.ReturnWindowMinutes).FirstAsync(cancellationToken);
+        var closesAt = load.PouringEndedAtUtc!.Value.AddMinutes(windowMinutes);
+        var pastWindow = DateTime.UtcNow > closesAt;
+        if (pastWindow && !late)
+        {
+            return Fail(StatusCodes.Status409Conflict,
+                $"A return has to be recorded within {windowMinutes} minutes of pouring ending. A plant manager can still record it late.");
+        }
+
+        if (pastWindow)
+        {
+            audit.Record(load.TenantId, "load.part_return_late", "TruckLoad", load.Id.ToString(), new { windowMinutes, closesAt });
         }
 
         if (await db.ReturnedConcretes.AnyAsync(r => r.SourceLoadId == id, cancellationToken))

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
+import { OpButton as Button } from "@/components/operator/OpButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PourCard } from "@/components/operator/PourCard";
 import { ReturnsPanel } from "@/components/operator/ReturnsPanel";
@@ -199,6 +199,7 @@ export function Operator() {
                     canTrack={can(me, PERMISSIONS.deliveriesTrack)}
                     canReturns={can(me, PERMISSIONS.returnsManage)}
                     canOverride={can(me, PERMISSIONS.deliveriesPlanOverride)}
+                    returnWindow={production.data?.returnWindowMinutes ?? 120}
                 />
             ))}
         </div>

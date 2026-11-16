@@ -1,15 +1,21 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { OpButton as Button } from "./OpButton";
 import type { OperatorLoad } from "@/lib/types";
 import { useAct } from "./useAct";
 
-export type IssueKind = "cancel" | "rejectPlant" | "rejectSite" | "part";
+export type IssueKind =
+    | "cancel"
+    | "rejectPlant"
+    | "rejectSite"
+    | "part"
+    | "partLate";
 
 const titles: Record<IssueKind, string> = {
     cancel: "Cancel this load",
     rejectPlant: "Reject this load at the plant",
     rejectSite: "Reject this load at the site",
     part: "Concrete came back after pouring",
+    partLate: "Record a late return",
 };
 
 const submitLabels: Record<IssueKind, string> = {
@@ -17,6 +23,7 @@ const submitLabels: Record<IssueKind, string> = {
     rejectPlant: "Reject load",
     rejectSite: "Reject load",
     part: "Record the return",
+    partLate: "Record the late return",
 };
 
 const inputClass =
@@ -40,20 +47,29 @@ export function LoadIssue({
     );
     const [amount, setAmount] = useState("");
 
-    const needsFault = kind === "rejectSite" || kind === "part";
-    const ready =
-        reason.trim().length >= 3 &&
-        (!needsFault || fault !== "") &&
-        (kind !== "part" || Number(amount) > 0);
+    const isPart = kind === "part" || kind === "partLate";
+    const needsFault = kind === "rejectSite" || isPart;
+    const danger =
+        kind === "cancel" || kind === "rejectPlant" || kind === "rejectSite";
+
+    const missing = [
+        isPart && !(Number(amount) > 0) ? "how much came back" : null,
+        needsFault && fault === "" ? "whose fault it is" : null,
+        reason.trim().length < 3 ? "a reason" : null,
+    ].filter((item): item is string => item !== null);
+    const ready = missing.length === 0;
 
     const submit = () => {
         const base = { reason: reason.trim() };
         const request =
             kind === "cancel"
                 ? { url: `/api/loads/${load.id}/cancel`, body: base }
-                : kind === "part"
+                : isPart
                   ? {
-                        url: `/api/loads/${load.id}/part-return`,
+                        url:
+                            kind === "partLate"
+                                ? `/api/loads/${load.id}/part-return/late`
+                                : `/api/loads/${load.id}/part-return`,
                         body: { ...base, fault, quantityCft: Number(amount) },
                     }
                   : {
@@ -66,8 +82,14 @@ export function LoadIssue({
     return (
         <div className="basis-full rounded-sm border bg-muted/40 p-4">
             <p className="font-semibold">{titles[kind]}</p>
+            {kind === "partLate" && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                    The time allowed for recording a return has passed. This is
+                    kept as a late return, with your name and reason.
+                </p>
+            )}
 
-            {kind === "part" && (
+            {isPart && (
                 <label className="mt-3 block text-sm">
                     <span className="mb-1 block text-muted-foreground">
                         How much came back, in CFT (less than {load.quantityCft}
@@ -97,7 +119,7 @@ export function LoadIssue({
                             className={`h-11 rounded-md border px-4 text-sm font-medium ${
                                 fault === value
                                     ? "border-ink bg-ink text-white"
-                                    : "bg-card"
+                                    : "bg-card hover:border-ink"
                             }`}
                         >
                             {value === "Company"
@@ -123,9 +145,10 @@ export function LoadIssue({
                 </p>
             )}
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
                 <Button
-                    className="h-12 px-5 text-base"
+                    tone={danger ? "danger" : undefined}
+                    className="h-12 px-5 text-base font-semibold"
                     disabled={!ready || act.isPending}
                     onClick={submit}
                 >
@@ -138,6 +161,11 @@ export function LoadIssue({
                 >
                     Never mind
                 </Button>
+                {!ready && (
+                    <p className="text-sm text-muted-foreground">
+                        Still needed: {missing.join(", ")}.
+                    </p>
+                )}
             </div>
         </div>
     );

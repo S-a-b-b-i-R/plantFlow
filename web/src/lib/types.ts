@@ -129,6 +129,7 @@ export interface ShiftProduction {
     remainingCft: number;
     deliveredCft: number;
     pours: OperatorPour[];
+    returnWindowMinutes: number;
 }
 
 export interface TruckOption {

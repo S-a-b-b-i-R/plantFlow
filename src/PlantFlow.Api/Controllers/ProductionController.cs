@@ -30,7 +30,7 @@ public record PourProductionDto(
 
 public record ShiftProductionDto(
     Guid PlanId, Guid PlantId, DateOnly Date, Guid ShiftId, ShiftPlanStatus Status,
-    decimal PlannedCft, decimal ProducedCft, decimal RemainingCft, decimal DeliveredCft, List<PourProductionDto> Pours);
+    decimal PlannedCft, decimal ProducedCft, decimal RemainingCft, decimal DeliveredCft, List<PourProductionDto> Pours, int ReturnWindowMinutes);
 
 public record TruckOptionDto(Guid Id, string Code, string? PlateNumber, decimal CapacityCft, bool Busy);
 
@@ -546,11 +546,13 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
                 mine.Select(ToDto).ToList(), p.ProductId);
         }).ToList();
 
+        var returnWindow = await db.Tenants.AsNoTracking().Where(t => t.Id == currentUser.TenantId)
+            .Select(t => t.ReturnWindowMinutes).FirstAsync(cancellationToken);
         var planned = items.Sum(i => i.PlannedCft);
         var producedTotal = items.Sum(i => i.ProducedCft);
         return new ShiftProductionDto(
             plan.Id, plan.PlantId, plan.Date, plan.ShiftId, plan.Status,
-            planned, producedTotal, planned - producedTotal, items.Sum(i => i.DeliveredCft), items);
+            planned, producedTotal, planned - producedTotal, items.Sum(i => i.DeliveredCft), items, returnWindow);
     }
 
     // A time must not be in the future. Without one, it is now.
