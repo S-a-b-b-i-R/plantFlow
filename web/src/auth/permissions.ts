@@ -6,6 +6,7 @@ export const PERMISSIONS = {
     batchesManage: "batches.manage",
     deliveriesTrack: "deliveries.track",
     deliveriesPlanOverride: "deliveries.plan.override",
+    returnsManage: "returns.manage",
 };
 
 export const can = (me: Me, permission: string) =>

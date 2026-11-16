@@ -12,7 +12,7 @@ namespace PlantFlow.Api.Controllers;
 public record ReturnedConcreteDto(
     Guid Id, Guid SourceLoadId, Guid PlantId, Guid ShiftPlanId, Guid ProductId, ReturnKind Kind, ReturnFault Fault,
     string Reason, decimal QuantityCft, decimal RemainingCft, decimal DumpedCft, ReturnStatus Status, string? Note,
-    DateTime CreatedAtUtc, DateTime? DecidedAtUtc);
+    DateTime CreatedAtUtc, DateTime? DecidedAtUtc, string? ProductCode = null);
 
 public class RejectLoadRequest
 {
@@ -61,7 +61,8 @@ public class ReturnsController(PlantFlowDbContext db, ICurrentUser currentUser, 
         if (status is { } s) query = query.Where(r => r.Status == s);
 
         var rows = await query.OrderByDescending(r => r.CreatedAtUtc).Take(200).ToListAsync(cancellationToken);
-        return rows.Select(ToDto).ToList();
+        var codes = await db.Products.AsNoTracking().ToDictionaryAsync(p => p.Id, p => p.Code, cancellationToken);
+        return rows.Select(r => ToDto(r) with { ProductCode = codes.GetValueOrDefault(r.ProductId) }).ToList();
     }
 
     // A whole load refused before pouring started: by QC at the plant, or at the site.

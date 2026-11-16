@@ -25,7 +25,8 @@ public record PourSurveyDto(
 public record PourProductionDto(
     Guid PourId, Guid OrderId, Guid OrderLineId, Guid SiteId, decimal PlannedCft, DateTime PlannedStart, Guid? PumpId,
     DateTime? PumpDispatchedAtUtc, DateTime? PumpArrivedAtUtc, DateTime? PumpAssembledAtUtc,
-    decimal ProducedCft, decimal RemainingCft, decimal DeliveredCft, PourSurveyDto? Survey, List<LoadDto> Loads);
+    decimal ProducedCft, decimal RemainingCft, decimal DeliveredCft, PourSurveyDto? Survey, List<LoadDto> Loads,
+    Guid ProductId);
 
 public record ShiftProductionDto(
     Guid PlanId, Guid PlantId, DateOnly Date, Guid ShiftId, ShiftPlanStatus Status,
@@ -488,7 +489,8 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
                 p.PumpId,
                 p.PumpDispatchedAtUtc,
                 p.PumpArrivedAtUtc,
-                p.PumpAssembledAtUtc
+                p.PumpAssembledAtUtc,
+                ProductId = p.OrderLine.ProductId
             }).ToListAsync(cancellationToken);
 
         var pourIds = pours.Select(p => p.Id).ToList();
@@ -541,7 +543,7 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
                     survey.Id, survey.Result, survey.Latitude, survey.Longitude, survey.PipingMetres, survey.PumpPosition,
                     survey.TruckConnectionPoint, survey.LocationNote,
                     images.Where(i => i.SurveyId == survey.Id).Select(i => i.Id).ToList()),
-                mine.Select(ToDto).ToList());
+                mine.Select(ToDto).ToList(), p.ProductId);
         }).ToList();
 
         var planned = items.Sum(i => i.PlannedCft);

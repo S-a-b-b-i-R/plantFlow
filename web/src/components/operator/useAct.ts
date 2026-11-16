@@ -15,6 +15,7 @@ export function useAct() {
                 queryClient.invalidateQueries({ queryKey: ["operator"] }),
                 queryClient.invalidateQueries({ queryKey: ["trucks"] }),
                 queryClient.invalidateQueries({ queryKey: ["live"] }),
+                queryClient.invalidateQueries({ queryKey: ["returns"] }),
             ]),
     });
 }

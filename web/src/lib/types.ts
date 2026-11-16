@@ -115,6 +115,7 @@ export interface OperatorPour {
     remainingCft: number;
     deliveredCft: number;
     loads: OperatorLoad[];
+    productId: string;
 }
 
 export interface ShiftProduction {
@@ -136,4 +137,31 @@ export interface TruckOption {
     plateNumber: string | null;
     capacityCft: number;
     busy: boolean;
+}
+
+export type ReturnStatus =
+    | "AwaitingInspection"
+    | "Reusable"
+    | "NeedsTreatment"
+    | "Treated"
+    | "Used"
+    | "Dumped";
+
+export interface ReturnedConcrete {
+    id: string;
+    sourceLoadId: string;
+    plantId: string;
+    shiftPlanId: string;
+    productId: string;
+    kind: "PartLoad" | "RejectedAtSite" | "RejectedAtPlant";
+    fault: "Company" | "Customer";
+    reason: string;
+    quantityCft: number;
+    remainingCft: number;
+    dumpedCft: number;
+    status: ReturnStatus;
+    note: string | null;
+    createdAtUtc: string;
+    decidedAtUtc: string | null;
+    productCode: string | null;
 }
