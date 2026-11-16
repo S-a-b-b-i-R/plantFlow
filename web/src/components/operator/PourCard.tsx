@@ -166,6 +166,10 @@ export function PourCard({
                                 canTrack={canTrack}
                                 busy={act.isPending}
                                 onAct={run}
+                                pumpPending={
+                                    !!production.pumpId &&
+                                    !production.pumpAssembledAtUtc
+                                }
                             />
                         ))}
                     </ul>
@@ -199,6 +203,7 @@ function LoadRow({
     now,
     canTrack,
     busy,
+    pumpPending,
     onAct,
 }: {
     load: OperatorLoad;
@@ -206,6 +211,7 @@ function LoadRow({
     now: number;
     canTrack: boolean;
     busy: boolean;
+    pumpPending: boolean;
     onAct: (a: { url: string; body: Record<string, unknown> }) => void;
 }) {
     const state = loadState(load);
@@ -213,6 +219,8 @@ function LoadRow({
     const since = stateSince(load);
     // Sending a load out is the operator's job. The later steps are recorded by whoever tracks trucks.
     const allowed = action && (state === "ready" || canTrack);
+    // A truck at a pumped pour waits for the pump before it can start pouring.
+    const held = pumpPending && state === "site";
 
     return (
         <li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
@@ -234,11 +242,16 @@ function LoadRow({
                     {since ? `, ${minutesSince(since, now)} min` : ""}
                     {load.quantityReason ? ` · ${load.quantityReason}` : ""}
                 </p>
+                {held && (
+                    <p className="text-sm font-semibold text-late">
+                        Waiting for the pump to be ready
+                    </p>
+                )}
             </div>
             {allowed && (
                 <Button
                     className={primary}
-                    disabled={busy}
+                    disabled={busy || held}
                     onClick={() => onAct(action)}
                 >
                     {action.label}

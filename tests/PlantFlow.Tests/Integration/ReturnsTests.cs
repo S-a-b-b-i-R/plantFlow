@@ -59,6 +59,7 @@ public partial class PourPlanningTests
     {
         var response = await c.PostAsJsonAsync($"/api/pours/{pourId}/loads", new { truckId = truck, returnedConcreteId });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await PumpReadyAsync(c, pourId);
         return (await response.Content.ReadFromJsonAsync<LoadDto>(ApiFactory.Json))!;
     }
 
@@ -71,6 +72,16 @@ public partial class PourPlanningTests
         (await Step(c, loadId, "PouringStarted", now.AddMinutes(2))).EnsureSuccessStatusCode();
         (await Step(c, loadId, "PouringEnded", now.AddMinutes(3))).EnsureSuccessStatusCode();
         (await Step(c, loadId, "Returned", now.AddMinutes(4))).EnsureSuccessStatusCode();
+    }
+
+    // The pump leaves, arrives and is set up, in order. A pour without a pump simply refuses the steps, which is fine here.
+    private static async Task PumpReadyAsync(HttpClient c, Guid pourId)
+    {
+        var now = DateTime.UtcNow;
+        foreach (var (step, minutes) in new[] { ("Dispatched", 0), ("Arrived", 1), ("Assembled", 2) })
+        {
+            await c.PostAsJsonAsync($"/api/pours/{pourId}/pump-steps", new { step, at = now.AddMinutes(minutes) });
+        }
     }
 
     private static async Task<PourProductionDto> PourViewAsync(HttpClient c, Guid planId, Guid pourId)

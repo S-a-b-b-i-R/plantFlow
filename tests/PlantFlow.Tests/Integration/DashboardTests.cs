@@ -50,8 +50,8 @@ public partial class PourPlanningTests
         Assert.Equal(1, a.Loads.Pouring);
         Assert.Equal(40m, a.ProducedCft);
 
-        // The pump was never dispatched and is long overdue.
-        Assert.Null(a.PumpDispatch!.ActualUtc);
+        // The pump had to be ready before pouring, and it left long after its plan.
+        Assert.NotNull(a.PumpDispatch!.ActualUtc);
         Assert.True(a.PumpDispatch.Late);
         Assert.True(a.Late);
         // Both pours are late: A's pump never left, and B never started.
