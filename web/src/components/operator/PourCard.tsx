@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { LuCheck } from "react-icons/lu";
 import { Button } from "@/components/ui/button";
 import { cft, plantTime } from "@/lib/format";
@@ -15,8 +16,10 @@ import type {
     LivePour,
     OperatorLoad,
     OperatorPour,
+    ReturnedConcrete,
     TruckOption,
 } from "@/lib/types";
+import { LoadIssue, type IssueKind } from "./LoadIssue";
 import { MakeLoad } from "./MakeLoad";
 import { useAct } from "./useAct";
 
@@ -27,15 +30,19 @@ export function PourCard({
     live,
     production,
     trucks,
+    stock,
     now,
     canTrack,
+    canReturns,
     canOverride,
 }: {
     live: LivePour;
     production: OperatorPour;
     trucks: TruckOption[];
+    stock: ReturnedConcrete[];
     now: number;
     canTrack: boolean;
+    canReturns: boolean;
     canOverride: boolean;
 }) {
     const act = useAct();
@@ -164,12 +171,13 @@ export function PourCard({
                                 truck={truckName(load.truckId)}
                                 now={now}
                                 canTrack={canTrack}
+                                canReturns={canReturns}
                                 busy={act.isPending}
-                                onAct={run}
                                 pumpPending={
                                     !!production.pumpId &&
                                     !production.pumpAssembledAtUtc
                                 }
+                                onAct={run}
                             />
                         ))}
                     </ul>
@@ -187,8 +195,10 @@ export function PourCard({
                 <div className="mt-4">
                     <MakeLoad
                         pourId={production.pourId}
+                        productId={production.productId}
                         remaining={production.remainingCft}
                         trucks={trucks}
+                        stock={stock}
                         canOverride={canOverride}
                     />
                 </div>
@@ -197,11 +207,41 @@ export function PourCard({
     );
 }
 
+function issuesFor(
+    load: OperatorLoad,
+    canReturns: boolean,
+): [IssueKind, string][] {
+    switch (loadState(load)) {
+        case "ready":
+            return [
+                ["cancel", "Cancel"],
+                ...(canReturns
+                    ? ([["rejectPlant", "Reject at plant"]] as [
+                          IssueKind,
+                          string,
+                      ][])
+                    : []),
+            ];
+        case "road":
+            return [["cancel", "Cancel"]];
+        case "site":
+            return canReturns ? [["rejectSite", "Reject at site"]] : [];
+        case "back":
+        case "done":
+            return canReturns && load.returnedCft === 0
+                ? [["part", "Concrete came back"]]
+                : [];
+        default:
+            return [];
+    }
+}
+
 function LoadRow({
     load,
     truck,
     now,
     canTrack,
+    canReturns,
     busy,
     pumpPending,
     onAct,
@@ -210,13 +250,16 @@ function LoadRow({
     truck: string;
     now: number;
     canTrack: boolean;
+    canReturns: boolean;
     busy: boolean;
     pumpPending: boolean;
     onAct: (a: { url: string; body: Record<string, unknown> }) => void;
 }) {
+    const [issue, setIssue] = useState<IssueKind | null>(null);
     const state = loadState(load);
     const action = loadAction(load);
     const since = stateSince(load);
+    const issues = issuesFor(load, canReturns);
     // Sending a load out is the operator's job. The later steps are recorded by whoever tracks trucks.
     const allowed = action && (state === "ready" || canTrack);
     // A truck at a pumped pour waits for the pump before it can start pouring.
@@ -241,6 +284,12 @@ function LoadRow({
                     {stateLabel[state]}
                     {since ? `, ${minutesSince(since, now)} min` : ""}
                     {load.quantityReason ? ` · ${load.quantityReason}` : ""}
+                    {state === "rejected" && load.rejectReason
+                        ? ` · ${load.rejectReason}`
+                        : ""}
+                    {load.returnedCft > 0
+                        ? ` · ${cft(load.returnedCft)} CFT came back`
+                        : ""}
                 </p>
                 {held && (
                     <p className="text-sm font-semibold text-late">
@@ -256,6 +305,29 @@ function LoadRow({
                 >
                     {action.label}
                 </Button>
+            )}
+
+            {issues.length > 0 && issue === null && (
+                <div className="flex basis-full flex-wrap gap-2 pl-0 sm:pl-[4.5rem]">
+                    {issues.map(([kind, label]) => (
+                        <Button
+                            key={kind}
+                            variant="outline"
+                            className="h-11 px-4"
+                            onClick={() => setIssue(kind)}
+                        >
+                            {label}
+                        </Button>
+                    ))}
+                </div>
+            )}
+
+            {issue && (
+                <LoadIssue
+                    load={load}
+                    kind={issue}
+                    onClose={() => setIssue(null)}
+                />
             )}
         </li>
     );

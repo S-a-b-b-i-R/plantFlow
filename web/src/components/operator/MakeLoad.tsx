@@ -2,10 +2,11 @@ import { useState } from "react";
 import { LuPlus, LuSearch, LuTruck, LuX } from "react-icons/lu";
 import { Button } from "@/components/ui/button";
 import { cft } from "@/lib/format";
-import type { TruckOption } from "@/lib/types";
+import { faultLabel, isUsable, kindLabel } from "@/lib/operator";
+import type { ReturnedConcrete, TruckOption } from "@/lib/types";
 import { useAct } from "./useAct";
 
-type Mode = "usual" | "other" | "over";
+type Mode = "usual" | "other" | "over" | "returned";
 
 const inputClass =
     "h-12 w-full rounded-md border bg-card px-3 text-base placeholder:text-muted-foreground";
@@ -13,13 +14,17 @@ const inputClass =
 // Make a load: choose how much, then tap the truck. One tap on a truck makes the load.
 export function MakeLoad({
     pourId,
+    productId,
     remaining,
     trucks,
+    stock,
     canOverride,
 }: {
     pourId: string;
+    productId: string;
     remaining: number;
     trucks: TruckOption[];
+    stock: ReturnedConcrete[];
     canOverride: boolean;
 }) {
     const act = useAct();
@@ -28,6 +33,12 @@ export function MakeLoad({
     const [query, setQuery] = useState("");
     const [amount, setAmount] = useState("");
     const [reason, setReason] = useState("");
+    const [stockId, setStockId] = useState<string | null>(null);
+
+    const usable = stock.filter(
+        (r) => isUsable(r) && r.productId === productId,
+    );
+    const chosen = usable.find((r) => r.id === stockId) ?? null;
 
     const fullyMade = remaining <= 0;
     const effective: Mode = fullyMade && mode === "usual" ? "over" : mode;
@@ -38,6 +49,7 @@ export function MakeLoad({
         setQuery("");
         setAmount("");
         setReason("");
+        setStockId(null);
         act.reset();
     };
 
@@ -60,6 +72,14 @@ export function MakeLoad({
                         Fully produced. Going over plan needs a plant manager.
                     </p>
                 )}
+                {!fullyMade && usable.length > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                        {cft(
+                            usable.reduce((sum, r) => sum + r.remainingCft, 0),
+                        )}{" "}
+                        CFT of returned concrete can be used here.
+                    </p>
+                )}
             </div>
         );
     }
@@ -77,7 +97,8 @@ export function MakeLoad({
     const quantity = Number(amount);
     const blocked =
         (effective === "other" && !(quantity > 0)) ||
-        (effective === "over" && reason.trim().length < 3);
+        (effective === "over" && reason.trim().length < 3) ||
+        (effective === "returned" && chosen === null);
 
     const sizeFor = (t: TruckOption) =>
         effective === "other" && quantity > 0
@@ -86,7 +107,9 @@ export function MakeLoad({
               ? quantity > 0
                   ? quantity
                   : t.capacityCft
-              : Math.min(t.capacityCft, remaining);
+              : effective === "returned" && chosen
+                ? Math.min(t.capacityCft, chosen.remainingCft, remaining)
+                : Math.min(t.capacityCft, remaining);
 
     const make = (truck: TruckOption) => {
         const body: Record<string, unknown> = { truckId: truck.id };
@@ -98,6 +121,7 @@ export function MakeLoad({
             body.overrideReason = reason.trim();
             if (quantity > 0) body.quantityCft = quantity;
         }
+        if (effective === "returned") body.returnedConcreteId = stockId;
         act.mutate(
             {
                 url:
@@ -113,6 +137,12 @@ export function MakeLoad({
     const modes: [Mode, string][] = [
         ["usual", "Usual load"],
         ["other", "Other amount"],
+        ...(usable.length
+            ? ([["returned", `Returned concrete (${usable.length})`]] as [
+                  Mode,
+                  string,
+              ][])
+            : []),
         ...(canOverride ? ([["over", "Over plan"]] as [Mode, string][]) : []),
     ];
 
@@ -152,7 +182,40 @@ export function MakeLoad({
                 </Button>
             </div>
 
-            {effective !== "usual" && (
+            {effective === "returned" && (
+                <ul
+                    className="mt-3 grid gap-2 sm:grid-cols-2"
+                    aria-label="Returned concrete"
+                >
+                    {usable.map((r) => (
+                        <li key={r.id}>
+                            <button
+                                type="button"
+                                aria-pressed={stockId === r.id}
+                                onClick={() => setStockId(r.id)}
+                                className={`w-full rounded-md border px-3 py-2 text-left ${
+                                    stockId === r.id
+                                        ? "border-ink bg-ink text-white"
+                                        : "bg-card"
+                                }`}
+                            >
+                                <span className="block font-semibold tabular-nums">
+                                    {r.productCode ?? "Concrete"},{" "}
+                                    {cft(r.remainingCft)} CFT
+                                </span>
+                                <span
+                                    className={`block text-xs ${stockId === r.id ? "text-white/75" : "text-muted-foreground"}`}
+                                >
+                                    {kindLabel[r.kind]},{" "}
+                                    {faultLabel[r.fault].toLowerCase()}
+                                </span>
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            {(effective === "other" || effective === "over") && (
                 <div className="mt-3 grid gap-3 sm:grid-cols-[10rem_1fr]">
                     <label className="text-sm">
                         <span className="mb-1 block text-muted-foreground">
@@ -200,7 +263,9 @@ export function MakeLoad({
                 {blocked
                     ? effective === "other"
                         ? "Enter the amount, then tap a truck."
-                        : "Give a reason, then tap a truck."
+                        : effective === "returned"
+                          ? "Choose the returned concrete, then tap a truck."
+                          : "Give a reason, then tap a truck."
                     : "Tap a truck to make the load."}
             </p>
 

@@ -1,4 +1,4 @@
-import type { OperatorLoad, OperatorPour } from "./types";
+import type { OperatorLoad, OperatorPour, ReturnedConcrete } from "./types";
 
 // The API sends UTC times. One without a zone mark is read as UTC, never as local time.
 export function utcMs(iso: string): number {
@@ -107,3 +107,27 @@ export function pumpAction(pour: OperatorPour): Action | null {
     if (!pour.pumpAssembledAtUtc) return step("Pump ready", "Assembled");
     return null;
 }
+
+export const kindLabel = {
+    PartLoad: "Part load came back",
+    RejectedAtSite: "Rejected at site",
+    RejectedAtPlant: "Rejected at plant",
+} as const;
+
+export const faultLabel = {
+    Company: "Company's fault",
+    Customer: "Customer's fault",
+} as const;
+
+export const returnStatusLabel: Record<string, string> = {
+    AwaitingInspection: "Waiting for inspection",
+    Reusable: "Good to use",
+    NeedsTreatment: "Needs treatment",
+    Treated: "Treated, good to use",
+    Used: "Used",
+    Dumped: "Dumped",
+};
+
+// Concrete that can go into a new load.
+export const isUsable = (r: ReturnedConcrete) =>
+    (r.status === "Reusable" || r.status === "Treated") && r.remainingCft > 0;

@@ -1,14 +1,20 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PourCard } from "@/components/operator/PourCard";
+import { ReturnsPanel } from "@/components/operator/ReturnsPanel";
 import { can, PERMISSIONS } from "@/auth/permissions";
 import { useMe } from "@/auth/useMe";
 import { api } from "@/lib/api";
 import { cft, clockSeconds, plantTime } from "@/lib/format";
-import { loadState } from "@/lib/operator";
-import type { LiveDashboard, ShiftProduction, TruckOption } from "@/lib/types";
+import { loadState, utcMs } from "@/lib/operator";
+import type {
+    LiveDashboard,
+    ReturnedConcrete,
+    ShiftProduction,
+    TruckOption,
+} from "@/lib/types";
 
 export function Operator() {
     const me = useMe().data!;
@@ -41,11 +47,17 @@ export function Operator() {
         refetchInterval: 10_000,
     });
 
-    const [now, setNow] = useState(0);
-    useEffect(() => {
-        const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-        return () => window.clearInterval(timer);
-    }, []);
+    const returns = useQuery({
+        queryKey: ["returns", planId],
+        queryFn: () =>
+            api<ReturnedConcrete[]>(`/api/returns?shiftPlanId=${planId}`),
+        enabled: !!planId,
+        refetchInterval: 10_000,
+    });
+    const stock = returns.data ?? [];
+
+    // The server's clock, refreshed with the board. Reading the browser clock while rendering is not allowed.
+    const now = board.data ? utcMs(board.data.asOfUtc) : 0;
     const cards = (production.data?.pours ?? [])
         .map((prod) => ({
             prod,
@@ -63,6 +75,9 @@ export function Operator() {
     const waiting = cards
         .flatMap((c) => c.prod.loads)
         .filter((l) => loadState(l) === "ready").length;
+    const inspect = stock.filter(
+        (r) => r.status === "AwaitingInspection",
+    ).length;
     const next = cards.find((c) => c.prod.remainingCft > 0);
 
     const [headline, tone] = waiting
@@ -72,14 +87,21 @@ export function Operator() {
                   : `${waiting} loads are ready to leave`,
               "text-foreground",
           ]
-        : next
+        : inspect
           ? [
-                `Next to make: ${next.live.customerName}, ${plantTime(next.live.plannedStart)}`,
-                next.live.late ? "text-late" : "text-foreground",
+                inspect === 1
+                    ? "1 returned load needs inspection"
+                    : `${inspect} returned loads need inspection`,
+                "text-foreground",
             ]
-          : cards.length
-            ? ["Everything is produced", "text-ok"]
-            : ["Nothing to make", "text-muted-foreground"];
+          : next
+            ? [
+                  `Next to make: ${next.live.customerName}, ${plantTime(next.live.plannedStart)}`,
+                  next.live.late ? "text-late" : "text-foreground",
+              ]
+            : cards.length
+              ? ["Everything is produced", "text-ok"]
+              : ["Nothing to make", "text-muted-foreground"];
 
     return (
         <div className="space-y-6">
@@ -161,14 +183,21 @@ export function Operator() {
                 </div>
             )}
 
+            <ReturnsPanel
+                stock={stock}
+                canManage={can(me, PERMISSIONS.returnsManage)}
+            />
+
             {cards.map(({ prod, live }) => (
                 <PourCard
                     key={prod.pourId}
                     live={live}
                     production={prod}
                     trucks={trucks.data ?? []}
+                    stock={stock}
                     now={now}
                     canTrack={can(me, PERMISSIONS.deliveriesTrack)}
+                    canReturns={can(me, PERMISSIONS.returnsManage)}
                     canOverride={can(me, PERMISSIONS.deliveriesPlanOverride)}
                 />
             ))}
