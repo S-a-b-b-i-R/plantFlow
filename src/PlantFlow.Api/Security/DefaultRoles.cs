@@ -47,7 +47,7 @@ public static class DefaultRoles
 
         ["Dispatcher"] = [OrdersView, DeliveriesDispatch, DeliveriesTrack, ReturnsManage, DashboardsView],
 
-        ["Batching Plant Operator"] = [OrdersView, DeliveriesDispatch, DeliveriesTrack, BatchesManage, DashboardsView],
+        ["Batching Plant Operator"] = [OrdersView, DeliveriesDispatch, DeliveriesTrack, BatchesManage, ReturnsManage, DashboardsView],
 
         ["Plant Manager"] =
         [

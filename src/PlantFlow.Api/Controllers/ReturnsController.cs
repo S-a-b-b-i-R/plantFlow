@@ -51,7 +51,7 @@ public class ReturnsController(PlantFlowDbContext db, ICurrentUser currentUser, 
 {
     // The latest 200, newest first. The operator reads this to find concrete he can use.
     [HttpGet("api/returns")]
-    [HasPermission(Permissions.BatchesManage)]
+    [HasPermission(Permissions.BatchesManage, Permissions.ReturnsQc)]
     public async Task<ActionResult<List<ReturnedConcreteDto>>> List(
         Guid? plantId, Guid? shiftPlanId, ReturnStatus? status, CancellationToken cancellationToken)
     {
@@ -196,9 +196,9 @@ public class ReturnsController(PlantFlowDbContext db, ICurrentUser currentUser, 
         return Created($"api/returns/{record.Id}", ToDto(record));
     }
 
-    // The plant's decision after inspecting, treating or giving up on the concrete.
+    // QC's decision after inspecting, treating or giving up on the concrete. Recording a return is not enough.
     [HttpPost("api/returns/{id:guid}/decide")]
-    [HasPermission(Permissions.ReturnsManage)]
+    [HasPermission(Permissions.ReturnsQc)]
     public async Task<ActionResult<ReturnedConcreteDto>> Decide(Guid id, DecideRequest request, CancellationToken cancellationToken)
     {
         var record = await db.ReturnedConcretes.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);

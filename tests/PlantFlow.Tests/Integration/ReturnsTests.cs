@@ -163,6 +163,7 @@ public partial class PourPlanningTests
         var admin = company.Admin.Client;
         var manager = await factory.AddMemberAsync(company, "Plant Manager");
         var rep = await factory.AddMemberAsync(company, "Sales Representative");
+        var technical = await factory.AddMemberAsync(company, "Technical");
         var s = await TwoPoursAsync(admin);
         (await admin.PutAsJsonAsync($"/api/vehicles/{s.Truck}/capacity", new { capacityCft = 40m })).EnsureSuccessStatusCode();
 
@@ -195,7 +196,8 @@ public partial class PourPlanningTests
 
         // The leftover is inspected and reused on pour B, in the same shift. The first customer is not billed for it.
         Assert.Equal(HttpStatusCode.Forbidden, (await DecideAsync(rep.Client, leftover.Id, "Reusable")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await DecideAsync(manager.Client, leftover.Id, "Reusable")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await DecideAsync(manager.Client, leftover.Id, "Reusable")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await DecideAsync(technical.Client, leftover.Id, "Reusable")).StatusCode);
         var reused = await ProduceLoadAsync(admin, s.PourB, s.Truck, leftover.Id);
         Assert.Equal(5m, reused.QuantityCft);
         Assert.Equal(35m, (await PourViewAsync(admin, s.PlanId, s.PourA)).DeliveredCft);
