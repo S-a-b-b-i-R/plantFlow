@@ -12,10 +12,10 @@ const settledStatuses = ["Used", "Dumped"];
 
 export function ReturnsPanel({
     stock,
-    canManage,
+    canDecide,
 }: {
     stock: ReturnedConcrete[];
-    canManage: boolean;
+    canDecide: boolean;
 }) {
     if (stock.length === 0) return null;
 
@@ -30,7 +30,9 @@ export function ReturnsPanel({
                 </h2>
                 <p className="mt-1.5 text-sm text-muted-foreground">
                     {open.length
-                        ? "Inspect it, then reuse, treat or dump it. Good concrete can go into a new load of the same product."
+                        ? canDecide
+                            ? "Inspect it, then reuse, treat or dump it. Good concrete can go into a new load of the same product."
+                            : "Quality control decides what happens to this. Once it is cleared, it can go into a new load of the same product."
                         : "Nothing is waiting for a decision."}
                 </p>
             </header>
@@ -41,7 +43,7 @@ export function ReturnsPanel({
                         <ReturnRow
                             key={item.id}
                             item={item}
-                            canManage={canManage}
+                            canDecide={canDecide}
                         />
                     ))}
                 </ul>
@@ -76,10 +78,10 @@ export function ReturnsPanel({
 
 function ReturnRow({
     item,
-    canManage,
+    canDecide,
 }: {
     item: ReturnedConcrete;
-    canManage: boolean;
+    canDecide: boolean;
 }) {
     const act = useAct();
     const [dumping, setDumping] = useState(false);
@@ -125,7 +127,7 @@ function ReturnRow({
                     </p>
                 </div>
 
-                {canManage && !dumping && (
+                {canDecide && !dumping && (
                     <div className="flex flex-wrap gap-2">
                         {choices.map(([decision, label]) => (
                             <Button

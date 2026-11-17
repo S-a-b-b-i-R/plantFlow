@@ -7,6 +7,7 @@ export const PERMISSIONS = {
     deliveriesTrack: "deliveries.track",
     deliveriesPlanOverride: "deliveries.plan.override",
     returnsManage: "returns.manage",
+    returnsQc: "returns.qc",
 };
 
 export const can = (me: Me, permission: string) =>

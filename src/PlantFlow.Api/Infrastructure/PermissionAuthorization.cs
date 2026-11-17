@@ -5,8 +5,9 @@ using PlantFlow.Api.Domain.Identity;
 namespace PlantFlow.Api.Infrastructure;
 
 // Usage: [HasPermission(Permissions.OrdersView)] on a controller or an action.
-public sealed class HasPermissionAttribute(string permission)
-    : AuthorizeAttribute(PermissionPolicyProvider.PolicyPrefix + permission)
+// More than one key means any of them is enough: [HasPermission(Permissions.BatchesManage, Permissions.ReturnsQc)].
+public sealed class HasPermissionAttribute(params string[] permissions)
+    : AuthorizeAttribute(PermissionPolicyProvider.PolicyPrefix + string.Join(PermissionPolicyProvider.AnyOf, permissions))
 {
 }
 
@@ -20,6 +21,7 @@ public sealed class PermissionPolicyProvider(IOptions<AuthorizationOptions> opti
     : DefaultAuthorizationPolicyProvider(options)
 {
     public const string PolicyPrefix = "permission:";
+    public const char AnyOf = '|';
 
     public override async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
     {
@@ -41,7 +43,8 @@ public sealed class PermissionAuthorizationHandler : AuthorizationHandler<Permis
     protected override Task HandleRequirementAsync(
         AuthorizationHandlerContext context, PermissionRequirement requirement)
     {
-        if (context.User.HasClaim(PlantFlowClaims.Permission, requirement.Permission))
+        var anyOf = requirement.Permission.Split(PermissionPolicyProvider.AnyOf);
+        if (anyOf.Any(permission => context.User.HasClaim(PlantFlowClaims.Permission, permission)))
         {
             context.Succeed(requirement);
         }

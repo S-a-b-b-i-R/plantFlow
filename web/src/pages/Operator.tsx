@@ -185,7 +185,7 @@ export function Operator() {
 
             <ReturnsPanel
                 stock={stock}
-                canManage={can(me, PERMISSIONS.returnsManage)}
+                canDecide={can(me, PERMISSIONS.returnsQc)}
             />
 
             {cards.map(({ prod, live }) => (

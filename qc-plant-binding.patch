@@ -1,0 +1,313 @@
+diff --git a/src/PlantFlow.Api/Controllers/ProductionController.cs b/src/PlantFlow.Api/Controllers/ProductionController.cs
+index 865e518..8c8bc00 100644
+--- a/src/PlantFlow.Api/Controllers/ProductionController.cs
++++ b/src/PlantFlow.Api/Controllers/ProductionController.cs
+@@ -349,12 +349,17 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
+ 
+         var truckId = request.TruckId!.Value;
+         var truck = await db.Vehicles.AsNoTracking().Where(v => v.Id == truckId)
+-            .Select(v => new { v.CapacityCft, v.Type, v.Status }).FirstOrDefaultAsync(cancellationToken);
++            .Select(v => new { v.CapacityCft, v.Type, v.Status, v.PlantId }).FirstOrDefaultAsync(cancellationToken);
+         if (truck is null || truck.Type != VehicleType.TransitMixer)
+         {
+             return Fail(StatusCodes.Status400BadRequest, "Choose a transit mixer. A pump cannot carry a load.");
+         }
+ 
++        if (truck.PlantId != pour.PlantId)
++        {
++            return Fail(StatusCodes.Status400BadRequest, "That truck belongs to another plant.");
++        }
++
+         if (truck.Status is VehicleStatus.Maintenance or VehicleStatus.Retired)
+         {
+             return Fail(StatusCodes.Status409Conflict, "That truck is in maintenance or retired.");
+@@ -469,12 +474,28 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
+         db.TruckLoads.Add(load);
+         audit.Record(load.TenantId, overrideReason is null ? "load.produced" : "load.produced_over_plan", "TruckLoad",
+             load.Id.ToString(), new { load.PourId, load.TruckId, load.Number, load.QuantityCft, load.QuantityReason, load.SourceReturnId });
+-        await db.SaveChangesAsync(cancellationToken);
++        try
++        {
++            await db.SaveChangesAsync(cancellationToken);
++        }
++        catch (DbUpdateException)
++        {
++            // Two requests for the same truck at once: the database lets only one through.
++            if (!await TruckIsOutAsync(truckId, cancellationToken)) throw;
++            return Fail(StatusCodes.Status409Conflict, "This truck is still out on another load.");
++        }
+ 
+         return Created($"api/loads/{load.Id}", ToDto(load));
+     }
+ 
+ 
++    private async Task<bool> TruckIsOutAsync(Guid truckId, CancellationToken cancellationToken)
++    {
++        db.ChangeTracker.Clear();
++        return await db.TruckLoads.AsNoTracking().AnyAsync(
++            l => l.TruckId == truckId && l.CancelledAtUtc == null && l.ReturnedAtUtc == null, cancellationToken);
++    }
++
+     private async Task<ActionResult<ShiftProductionDto>> BuildAsync(Guid planId, CancellationToken cancellationToken)
+     {
+         var plan = await db.ShiftPlans.AsNoTracking().Where(p => p.Id == planId)
+diff --git a/src/PlantFlow.Api/Controllers/ReturnsController.cs b/src/PlantFlow.Api/Controllers/ReturnsController.cs
+index c48825c..fb8dfd2 100644
+--- a/src/PlantFlow.Api/Controllers/ReturnsController.cs
++++ b/src/PlantFlow.Api/Controllers/ReturnsController.cs
+@@ -51,7 +51,7 @@ public class ReturnsController(PlantFlowDbContext db, ICurrentUser currentUser,
+ {
+     // The latest 200, newest first. The operator reads this to find concrete he can use.
+     [HttpGet("api/returns")]
+-    [HasPermission(Permissions.BatchesManage)]
++    [HasPermission(Permissions.BatchesManage, Permissions.ReturnsQc)]
+     public async Task<ActionResult<List<ReturnedConcreteDto>>> List(
+         Guid? plantId, Guid? shiftPlanId, ReturnStatus? status, CancellationToken cancellationToken)
+     {
+@@ -196,9 +196,9 @@ public class ReturnsController(PlantFlowDbContext db, ICurrentUser currentUser,
+         return Created($"api/returns/{record.Id}", ToDto(record));
+     }
+ 
+-    // The plant's decision after inspecting, treating or giving up on the concrete.
++    // QC's decision after inspecting, treating or giving up on the concrete. Recording a return is not enough.
+     [HttpPost("api/returns/{id:guid}/decide")]
+-    [HasPermission(Permissions.ReturnsManage)]
++    [HasPermission(Permissions.ReturnsQc)]
+     public async Task<ActionResult<ReturnedConcreteDto>> Decide(Guid id, DecideRequest request, CancellationToken cancellationToken)
+     {
+         var record = await db.ReturnedConcretes.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+diff --git a/src/PlantFlow.Api/Data/Configurations/PlanningConfigurations.cs b/src/PlantFlow.Api/Data/Configurations/PlanningConfigurations.cs
+index 923d624..5f7404f 100644
+--- a/src/PlantFlow.Api/Data/Configurations/PlanningConfigurations.cs
++++ b/src/PlantFlow.Api/Data/Configurations/PlanningConfigurations.cs
+@@ -108,6 +108,9 @@ public class TruckLoadConfiguration : IEntityTypeConfiguration<TruckLoad>
+         builder.Property(l => l.CancelReason).HasMaxLength(300);
+         builder.HasIndex(l => l.PourId);
+         builder.HasIndex(l => l.TruckId);
++        // A truck can have only one load that is neither back nor cancelled. The code checks it too; this holds under a race.
++        builder.HasIndex(l => l.TruckId).IsUnique().HasDatabaseName("UX_TruckLoads_OneOpenLoadPerTruck")
++            .HasFilter("[CancelledAtUtc] IS NULL AND [ReturnedAtUtc] IS NULL");
+         builder.Property(l => l.ReturnedCft).HasPrecision(10, 2);
+         builder.Property(l => l.RejectReason).HasMaxLength(300);
+         builder.HasIndex(l => l.SourceReturnId);
+diff --git a/src/PlantFlow.Api/Infrastructure/PermissionAuthorization.cs b/src/PlantFlow.Api/Infrastructure/PermissionAuthorization.cs
+index 8e81df9..9abc13b 100644
+--- a/src/PlantFlow.Api/Infrastructure/PermissionAuthorization.cs
++++ b/src/PlantFlow.Api/Infrastructure/PermissionAuthorization.cs
+@@ -5,8 +5,9 @@ using PlantFlow.Api.Domain.Identity;
+ namespace PlantFlow.Api.Infrastructure;
+ 
+ // Usage: [HasPermission(Permissions.OrdersView)] on a controller or an action.
+-public sealed class HasPermissionAttribute(string permission)
+-    : AuthorizeAttribute(PermissionPolicyProvider.PolicyPrefix + permission)
++// More than one key means any of them is enough: [HasPermission(Permissions.BatchesManage, Permissions.ReturnsQc)].
++public sealed class HasPermissionAttribute(params string[] permissions)
++    : AuthorizeAttribute(PermissionPolicyProvider.PolicyPrefix + string.Join(PermissionPolicyProvider.AnyOf, permissions))
+ {
+ }
+ 
+@@ -20,6 +21,7 @@ public sealed class PermissionPolicyProvider(IOptions<AuthorizationOptions> opti
+     : DefaultAuthorizationPolicyProvider(options)
+ {
+     public const string PolicyPrefix = "permission:";
++    public const char AnyOf = '|';
+ 
+     public override async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
+     {
+@@ -41,7 +43,8 @@ public sealed class PermissionAuthorizationHandler : AuthorizationHandler<Permis
+     protected override Task HandleRequirementAsync(
+         AuthorizationHandlerContext context, PermissionRequirement requirement)
+     {
+-        if (context.User.HasClaim(PlantFlowClaims.Permission, requirement.Permission))
++        var anyOf = requirement.Permission.Split(PermissionPolicyProvider.AnyOf);
++        if (anyOf.Any(permission => context.User.HasClaim(PlantFlowClaims.Permission, permission)))
+         {
+             context.Succeed(requirement);
+         }
+diff --git a/src/PlantFlow.Api/Security/DefaultRoles.cs b/src/PlantFlow.Api/Security/DefaultRoles.cs
+index 98503d6..a22ff1f 100644
+--- a/src/PlantFlow.Api/Security/DefaultRoles.cs
++++ b/src/PlantFlow.Api/Security/DefaultRoles.cs
+@@ -47,7 +47,7 @@ public static class DefaultRoles
+ 
+         ["Dispatcher"] = [OrdersView, DeliveriesDispatch, DeliveriesTrack, ReturnsManage, DashboardsView],
+ 
+-        ["Batching Plant Operator"] = [OrdersView, DeliveriesDispatch, DeliveriesTrack, BatchesManage, DashboardsView],
++        ["Batching Plant Operator"] = [OrdersView, DeliveriesDispatch, DeliveriesTrack, BatchesManage, ReturnsManage, DashboardsView],
+ 
+         ["Plant Manager"] =
+         [
+diff --git a/tests/PlantFlow.Tests/Integration/ConsoleTests.cs b/tests/PlantFlow.Tests/Integration/ConsoleTests.cs
+index da99587..766f843 100644
+--- a/tests/PlantFlow.Tests/Integration/ConsoleTests.cs
++++ b/tests/PlantFlow.Tests/Integration/ConsoleTests.cs
+@@ -193,4 +193,63 @@ public partial class PourPlanningTests
+         Assert.Equal(ReturnFault.Company, record.Fault);
+         Assert.Equal(load.QuantityCft, record.QuantityCft);
+     }
++
++    [Fact]
++    public async Task Only_quality_control_decides_what_happens_to_returned_concrete()
++    {
++        var company = await factory.CreateCompanyAsync();
++        var admin = company.Admin.Client;
++        var op = (await factory.AddMemberAsync(company, "Batching Plant Operator")).Client;
++        var manager = (await factory.AddMemberAsync(company, "Plant Manager")).Client;
++        var rep = (await factory.AddMemberAsync(company, "Sales Representative")).Client;
++        var technical = (await factory.AddMemberAsync(company, "Technical")).Client;
++        var s = await TwoPoursAsync(admin);
++
++        // The operator records the reject, which is a return, so it needs no QC.
++        var load = await ProduceLoadAsync(op, s.PourB, s.Truck);
++        var reject = await op.PostAsJsonAsync($"/api/loads/{load.Id}/reject", new { reason = "Failed QC" });
++        Assert.Equal(HttpStatusCode.Created, reject.StatusCode);
++        var record = (await reject.Content.ReadFromJsonAsync<ReturnedConcreteDto>(ApiFactory.Json))!;
++
++        var list = $"/api/returns?shiftPlanId={s.PlanId}";
++        Assert.Equal(HttpStatusCode.OK, (await technical.GetAsync(list)).StatusCode);
++        Assert.Equal(HttpStatusCode.OK, (await op.GetAsync(list)).StatusCode);
++        Assert.Equal(HttpStatusCode.Forbidden, (await rep.GetAsync(list)).StatusCode);
++
++        // Neither the operator nor the plant manager can decide. QC can.
++        var decide = $"/api/returns/{record.Id}/decide";
++        Assert.Equal(HttpStatusCode.Forbidden, (await op.PostAsJsonAsync(decide, new { decision = "Reusable" })).StatusCode);
++        Assert.Equal(HttpStatusCode.Forbidden, (await manager.PostAsJsonAsync(decide, new { decision = "Reusable" })).StatusCode);
++        Assert.Equal(HttpStatusCode.OK, (await technical.PostAsJsonAsync(decide, new { decision = "Reusable" })).StatusCode);
++
++        // QC sees the stock but cannot run the plant.
++        Assert.Equal(HttpStatusCode.Forbidden,
++            (await technical.PostAsJsonAsync($"/api/pours/{s.PourB}/loads", new { truckId = s.Truck })).StatusCode);
++    }
++
++    [Fact]
++    public async Task A_truck_has_to_belong_to_the_plant_of_the_pour()
++    {
++        var admin = (await factory.CreateCompanyAsync()).Admin.Client;
++        var s = await ApprovedPourAsync(admin);
++        var otherPlant = await CreatePlantAsync(admin, "OTH1");
++        var stranger = await CreateMixerAsync(admin, otherPlant, "MX-OTH");
++
++        var response = await admin.PostAsJsonAsync($"/api/pours/{s.PourId}/loads", new { truckId = stranger });
++        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
++        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync($"/api/pours/{s.PourId}/loads", new { truckId = s.Truck })).StatusCode);
++    }
++
++    [Fact]
++    public async Task Two_requests_for_the_same_truck_at_once_make_only_one_load()
++    {
++        var admin = (await factory.CreateCompanyAsync()).Admin.Client;
++        var s = await TwoPoursAsync(admin);
++
++        var attempts = await Task.WhenAll(Enumerable.Range(0, 4).Select(i =>
++            admin.PostAsJsonAsync($"/api/pours/{(i % 2 == 0 ? s.PourA : s.PourB)}/loads", new { truckId = s.Truck })));
++
++        Assert.Equal(1, attempts.Count(r => r.StatusCode == HttpStatusCode.Created));
++        Assert.All(attempts.Where(r => r.StatusCode != HttpStatusCode.Created), r => Assert.Equal(HttpStatusCode.Conflict, r.StatusCode));
++    }
+ }
+diff --git a/tests/PlantFlow.Tests/Integration/ReturnsTests.cs b/tests/PlantFlow.Tests/Integration/ReturnsTests.cs
+index 22a05c5..d251c90 100644
+--- a/tests/PlantFlow.Tests/Integration/ReturnsTests.cs
++++ b/tests/PlantFlow.Tests/Integration/ReturnsTests.cs
+@@ -163,6 +163,7 @@ public partial class PourPlanningTests
+         var admin = company.Admin.Client;
+         var manager = await factory.AddMemberAsync(company, "Plant Manager");
+         var rep = await factory.AddMemberAsync(company, "Sales Representative");
++        var technical = await factory.AddMemberAsync(company, "Technical");
+         var s = await TwoPoursAsync(admin);
+         (await admin.PutAsJsonAsync($"/api/vehicles/{s.Truck}/capacity", new { capacityCft = 40m })).EnsureSuccessStatusCode();
+ 
+@@ -195,7 +196,8 @@ public partial class PourPlanningTests
+ 
+         // The leftover is inspected and reused on pour B, in the same shift. The first customer is not billed for it.
+         Assert.Equal(HttpStatusCode.Forbidden, (await DecideAsync(rep.Client, leftover.Id, "Reusable")).StatusCode);
+-        Assert.Equal(HttpStatusCode.OK, (await DecideAsync(manager.Client, leftover.Id, "Reusable")).StatusCode);
++        Assert.Equal(HttpStatusCode.Forbidden, (await DecideAsync(manager.Client, leftover.Id, "Reusable")).StatusCode);
++        Assert.Equal(HttpStatusCode.OK, (await DecideAsync(technical.Client, leftover.Id, "Reusable")).StatusCode);
+         var reused = await ProduceLoadAsync(admin, s.PourB, s.Truck, leftover.Id);
+         Assert.Equal(5m, reused.QuantityCft);
+         Assert.Equal(35m, (await PourViewAsync(admin, s.PlanId, s.PourA)).DeliveredCft);
+diff --git a/web/src/auth/permissions.ts b/web/src/auth/permissions.ts
+index c407c2a..ebd0abf 100644
+--- a/web/src/auth/permissions.ts
++++ b/web/src/auth/permissions.ts
+@@ -7,6 +7,7 @@ export const PERMISSIONS = {
+     deliveriesTrack: "deliveries.track",
+     deliveriesPlanOverride: "deliveries.plan.override",
+     returnsManage: "returns.manage",
++    returnsQc: "returns.qc",
+ };
+ 
+ export const can = (me: Me, permission: string) =>
+diff --git a/web/src/components/operator/ReturnsPanel.tsx b/web/src/components/operator/ReturnsPanel.tsx
+index ff06f09..77145a9 100644
+--- a/web/src/components/operator/ReturnsPanel.tsx
++++ b/web/src/components/operator/ReturnsPanel.tsx
+@@ -12,10 +12,10 @@ const settledStatuses = ["Used", "Dumped"];
+ 
+ export function ReturnsPanel({
+     stock,
+-    canManage,
++    canDecide,
+ }: {
+     stock: ReturnedConcrete[];
+-    canManage: boolean;
++    canDecide: boolean;
+ }) {
+     if (stock.length === 0) return null;
+ 
+@@ -30,7 +30,9 @@ export function ReturnsPanel({
+                 </h2>
+                 <p className="mt-1.5 text-sm text-muted-foreground">
+                     {open.length
+-                        ? "Inspect it, then reuse, treat or dump it. Good concrete can go into a new load of the same product."
++                        ? canDecide
++                            ? "Inspect it, then reuse, treat or dump it. Good concrete can go into a new load of the same product."
++                            : "Quality control decides what happens to this. Once it is cleared, it can go into a new load of the same product."
+                         : "Nothing is waiting for a decision."}
+                 </p>
+             </header>
+@@ -41,7 +43,7 @@ export function ReturnsPanel({
+                         <ReturnRow
+                             key={item.id}
+                             item={item}
+-                            canManage={canManage}
++                            canDecide={canDecide}
+                         />
+                     ))}
+                 </ul>
+@@ -76,10 +78,10 @@ export function ReturnsPanel({
+ 
+ function ReturnRow({
+     item,
+-    canManage,
++    canDecide,
+ }: {
+     item: ReturnedConcrete;
+-    canManage: boolean;
++    canDecide: boolean;
+ }) {
+     const act = useAct();
+     const [dumping, setDumping] = useState(false);
+@@ -125,7 +127,7 @@ function ReturnRow({
+                     </p>
+                 </div>
+ 
+-                {canManage && !dumping && (
++                {canDecide && !dumping && (
+                     <div className="flex flex-wrap gap-2">
+                         {choices.map(([decision, label]) => (
+                             <Button
+diff --git a/web/src/pages/Operator.tsx b/web/src/pages/Operator.tsx
+index f92b615..2181d00 100644
+--- a/web/src/pages/Operator.tsx
++++ b/web/src/pages/Operator.tsx
+@@ -185,7 +185,7 @@ export function Operator() {
+ 
+             <ReturnsPanel
+                 stock={stock}
+-                canManage={can(me, PERMISSIONS.returnsManage)}
++                canDecide={can(me, PERMISSIONS.returnsQc)}
+             />
+ 
+             {cards.map(({ prod, live }) => (

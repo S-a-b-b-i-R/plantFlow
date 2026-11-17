@@ -349,10 +349,15 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
 
         var truckId = request.TruckId!.Value;
         var truck = await db.Vehicles.AsNoTracking().Where(v => v.Id == truckId)
-            .Select(v => new { v.CapacityCft, v.Type, v.Status }).FirstOrDefaultAsync(cancellationToken);
+            .Select(v => new { v.CapacityCft, v.Type, v.Status, v.PlantId }).FirstOrDefaultAsync(cancellationToken);
         if (truck is null || truck.Type != VehicleType.TransitMixer)
         {
             return Fail(StatusCodes.Status400BadRequest, "Choose a transit mixer. A pump cannot carry a load.");
+        }
+
+        if (truck.PlantId != pour.PlantId)
+        {
+            return Fail(StatusCodes.Status400BadRequest, "That truck belongs to another plant.");
         }
 
         if (truck.Status is VehicleStatus.Maintenance or VehicleStatus.Retired)
@@ -469,11 +474,27 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
         db.TruckLoads.Add(load);
         audit.Record(load.TenantId, overrideReason is null ? "load.produced" : "load.produced_over_plan", "TruckLoad",
             load.Id.ToString(), new { load.PourId, load.TruckId, load.Number, load.QuantityCft, load.QuantityReason, load.SourceReturnId });
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // Two requests for the same truck at once: the database lets only one through.
+            if (!await TruckIsOutAsync(truckId, cancellationToken)) throw;
+            return Fail(StatusCodes.Status409Conflict, "This truck is still out on another load.");
+        }
 
         return Created($"api/loads/{load.Id}", ToDto(load));
     }
 
+
+    private async Task<bool> TruckIsOutAsync(Guid truckId, CancellationToken cancellationToken)
+    {
+        db.ChangeTracker.Clear();
+        return await db.TruckLoads.AsNoTracking().AnyAsync(
+            l => l.TruckId == truckId && l.CancelledAtUtc == null && l.ReturnedAtUtc == null, cancellationToken);
+    }
 
     private async Task<ActionResult<ShiftProductionDto>> BuildAsync(Guid planId, CancellationToken cancellationToken)
     {

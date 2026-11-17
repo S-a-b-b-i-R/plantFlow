@@ -193,4 +193,63 @@ public partial class PourPlanningTests
         Assert.Equal(ReturnFault.Company, record.Fault);
         Assert.Equal(load.QuantityCft, record.QuantityCft);
     }
+
+    [Fact]
+    public async Task Only_quality_control_decides_what_happens_to_returned_concrete()
+    {
+        var company = await factory.CreateCompanyAsync();
+        var admin = company.Admin.Client;
+        var op = (await factory.AddMemberAsync(company, "Batching Plant Operator")).Client;
+        var manager = (await factory.AddMemberAsync(company, "Plant Manager")).Client;
+        var rep = (await factory.AddMemberAsync(company, "Sales Representative")).Client;
+        var technical = (await factory.AddMemberAsync(company, "Technical")).Client;
+        var s = await TwoPoursAsync(admin);
+
+        // The operator records the reject, which is a return, so it needs no QC.
+        var load = await ProduceLoadAsync(op, s.PourB, s.Truck);
+        var reject = await op.PostAsJsonAsync($"/api/loads/{load.Id}/reject", new { reason = "Failed QC" });
+        Assert.Equal(HttpStatusCode.Created, reject.StatusCode);
+        var record = (await reject.Content.ReadFromJsonAsync<ReturnedConcreteDto>(ApiFactory.Json))!;
+
+        var list = $"/api/returns?shiftPlanId={s.PlanId}";
+        Assert.Equal(HttpStatusCode.OK, (await technical.GetAsync(list)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await op.GetAsync(list)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await rep.GetAsync(list)).StatusCode);
+
+        // Neither the operator nor the plant manager can decide. QC can.
+        var decide = $"/api/returns/{record.Id}/decide";
+        Assert.Equal(HttpStatusCode.Forbidden, (await op.PostAsJsonAsync(decide, new { decision = "Reusable" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await manager.PostAsJsonAsync(decide, new { decision = "Reusable" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await technical.PostAsJsonAsync(decide, new { decision = "Reusable" })).StatusCode);
+
+        // QC sees the stock but cannot run the plant.
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await technical.PostAsJsonAsync($"/api/pours/{s.PourB}/loads", new { truckId = s.Truck })).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_truck_has_to_belong_to_the_plant_of_the_pour()
+    {
+        var admin = (await factory.CreateCompanyAsync()).Admin.Client;
+        var s = await ApprovedPourAsync(admin);
+        var otherPlant = await CreatePlantAsync(admin, "OTH1");
+        var stranger = await CreateMixerAsync(admin, otherPlant, "MX-OTH");
+
+        var response = await admin.PostAsJsonAsync($"/api/pours/{s.PourId}/loads", new { truckId = stranger });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync($"/api/pours/{s.PourId}/loads", new { truckId = s.Truck })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Two_requests_for_the_same_truck_at_once_make_only_one_load()
+    {
+        var admin = (await factory.CreateCompanyAsync()).Admin.Client;
+        var s = await TwoPoursAsync(admin);
+
+        var attempts = await Task.WhenAll(Enumerable.Range(0, 4).Select(i =>
+            admin.PostAsJsonAsync($"/api/pours/{(i % 2 == 0 ? s.PourA : s.PourB)}/loads", new { truckId = s.Truck })));
+
+        Assert.Equal(1, attempts.Count(r => r.StatusCode == HttpStatusCode.Created));
+        Assert.All(attempts.Where(r => r.StatusCode != HttpStatusCode.Created), r => Assert.Equal(HttpStatusCode.Conflict, r.StatusCode));
+    }
 }

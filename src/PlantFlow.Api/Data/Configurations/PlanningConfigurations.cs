@@ -108,6 +108,9 @@ public class TruckLoadConfiguration : IEntityTypeConfiguration<TruckLoad>
         builder.Property(l => l.CancelReason).HasMaxLength(300);
         builder.HasIndex(l => l.PourId);
         builder.HasIndex(l => l.TruckId);
+        // A truck can have only one load that is neither back nor cancelled. The code checks it too; this holds under a race.
+        builder.HasIndex(l => l.TruckId).IsUnique().HasDatabaseName("UX_TruckLoads_OneOpenLoadPerTruck")
+            .HasFilter("[CancelledAtUtc] IS NULL AND [ReturnedAtUtc] IS NULL");
         builder.Property(l => l.ReturnedCft).HasPrecision(10, 2);
         builder.Property(l => l.RejectReason).HasMaxLength(300);
         builder.HasIndex(l => l.SourceReturnId);

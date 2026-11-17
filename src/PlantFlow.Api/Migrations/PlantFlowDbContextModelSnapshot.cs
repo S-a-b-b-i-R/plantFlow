@@ -2067,7 +2067,10 @@ namespace PlantFlow.Api.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.HasIndex("TruckId");
+                    b.HasIndex("TruckId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TruckLoads_OneOpenLoadPerTruck")
+                        .HasFilter("[CancelledAtUtc] IS NULL AND [ReturnedAtUtc] IS NULL");
 
                     b.ToTable("TruckLoads");
                 });
