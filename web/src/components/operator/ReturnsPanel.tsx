@@ -76,12 +76,15 @@ export function ReturnsPanel({
     );
 }
 
-function ReturnRow({
+export function ReturnRow({
     item,
     canDecide,
+    where,
 }: {
     item: ReturnedConcrete;
     canDecide: boolean;
+    // Shown when the list spans plants or days.
+    where?: string;
 }) {
     const act = useAct();
     const [dumping, setDumping] = useState(false);
@@ -125,6 +128,9 @@ function ReturnRow({
                     <p className="mt-1 text-sm font-semibold">
                         {returnStatusLabel[item.status]}
                     </p>
+                    {where && (
+                        <p className="text-xs text-muted-foreground">{where}</p>
+                    )}
                 </div>
 
                 {canDecide && !dumping && (
