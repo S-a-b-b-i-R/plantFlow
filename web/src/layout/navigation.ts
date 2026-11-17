@@ -1,5 +1,5 @@
 import type { IconType } from "react-icons";
-import { LuActivity, LuTruck } from "react-icons/lu";
+import { LuActivity, LuFlaskConical, LuTruck } from "react-icons/lu";
 import { can, PERMISSIONS } from "@/auth/permissions";
 import type { Me } from "@/lib/types";
 
@@ -23,6 +23,12 @@ export const navigation: NavItem[] = [
         label: "Batching",
         icon: LuTruck,
         permissions: [PERMISSIONS.batchesManage, PERMISSIONS.dashboardsView],
+    },
+    {
+        to: "/quality",
+        label: "Quality",
+        icon: LuFlaskConical,
+        permissions: [PERMISSIONS.returnsQc],
     },
 ];
 
