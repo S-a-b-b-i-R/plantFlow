@@ -2,25 +2,9 @@ import { NavLink, Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Mark } from "@/components/Mark";
 import { useAuth } from "@/auth/auth-context";
-import { can, PERMISSIONS } from "@/auth/permissions";
+import { canOpen, navigation } from "@/layout/navigation";
 import { useMe } from "@/auth/useMe";
-import { LuActivity, LuLogOut, LuTruck } from "react-icons/lu";
-
-// What appears in the navigation, and the permission that shows it.
-const navigation = [
-    {
-        to: "/live",
-        label: "Live operations",
-        icon: LuActivity,
-        permission: PERMISSIONS.dashboardsView,
-    },
-    {
-        to: "/operator",
-        label: "Batching",
-        icon: LuTruck,
-        permission: PERMISSIONS.batchesManage,
-    },
-];
+import { LuLogOut } from "react-icons/lu";
 
 export function AppShell() {
     const { signOut } = useAuth();
@@ -47,7 +31,7 @@ export function AppShell() {
                         aria-label="Main"
                     >
                         {navigation
-                            .filter((item) => can(me, item.permission))
+                            .filter((item) => canOpen(me, item))
                             .map((item) => (
                                 <NavLink
                                     key={item.to}

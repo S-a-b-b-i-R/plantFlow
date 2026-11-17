@@ -1,6 +1,8 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import { Gate } from "@/auth/Gate";
+import { RequirePermission } from "@/auth/RequirePermission";
 import { AppShell } from "@/layout/AppShell";
+import { Home } from "@/pages/Home";
 import { LiveBoard } from "@/pages/LiveBoard";
 import { Operator } from "@/pages/Operator";
 
@@ -9,13 +11,15 @@ export default function App() {
         <Routes>
             <Route element={<Gate />}>
                 <Route element={<AppShell />}>
-                    <Route index element={<Navigate to="/live" replace />} />
-                    <Route path="live" element={<LiveBoard />} />
+                    <Route index element={<Home />} />
+                    <Route element={<RequirePermission />}>
+                        <Route path="live" element={<LiveBoard />} />
+                        <Route path="operator" element={<Operator />} />
+                    </Route>
                     <Route
                         path="*"
                         element={<p className="text-sm">Page not found.</p>}
                     />
-                    <Route path="operator" element={<Operator />} />
                 </Route>
             </Route>
         </Routes>
