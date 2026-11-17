@@ -13,7 +13,7 @@ public partial class PourPlanningTests(ApiFactory factory)
     // One plant with three shifts, two pumps and a confirmed order with a pumped line (500 CFT) and a chute line (100 CFT).
     // The site is surveyed OK unless asked otherwise. The order is 5 km from the plant.
     private sealed record Fixture(
-        OrderWorld W, Guid Morning, Guid Afternoon, Guid Night, Guid Pump, Guid Pump2, Guid PumpLine, Guid ChuteLine);
+        OrderWorld W, Guid Morning, Guid Afternoon, Guid Night, Guid Pump, Guid Pump2, Guid PumpLine, Guid ChuteLine, Guid Mixer);
 
     private static async Task<Fixture> SetupAsync(HttpClient admin, bool withSurvey = true, Guid? pumpDriver = null)
     {
@@ -23,6 +23,7 @@ public partial class PourPlanningTests(ApiFactory factory)
         var night = await CreateShiftAsync(admin, w.PlantId, "Night", "22:00:00", "06:00:00");
         var pump = await CreatePumpAsync(admin, w.PlantId, "PMP1", pumpDriver);
         var pump2 = await CreatePumpAsync(admin, w.PlantId, "PMP2", assemblyMinutes: 60);
+        var mixer = await CreateMixerAsync(admin, w.PlantId, "MX1");
 
         var order = await CreateConfirmedAsync(admin, w,
         [
@@ -32,7 +33,7 @@ public partial class PourPlanningTests(ApiFactory factory)
         if (withSurvey) (await AddSurveyAsync(admin, w.SiteId, "Ok")).EnsureSuccessStatusCode();
 
         return new Fixture(w, morning, afternoon, night, pump, pump2,
-            order.Lines.Single(l => l.QuantityCft == 500m).Id, order.Lines.Single(l => l.QuantityCft == 100m).Id);
+            order.Lines.Single(l => l.QuantityCft == 500m).Id, order.Lines.Single(l => l.QuantityCft == 100m).Id, mixer);
     }
 
     private static async Task<Guid> CreateShiftAsync(HttpClient c, Guid plantId, string name, string start, string end)
@@ -46,6 +47,15 @@ public partial class PourPlanningTests(ApiFactory factory)
     {
         var response = await c.PostAsJsonAsync("/api/vehicles",
             new { plantId, code, type = "Pump", defaultDriverId = driverId, assemblyMinutes });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<VehicleDto>(ApiFactory.Json))!.Id;
+    }
+
+    private static async Task<Guid> CreateMixerAsync(
+        HttpClient c, Guid plantId, string code, decimal capacityCft = 100m, string status = "Available")
+    {
+        var response = await c.PostAsJsonAsync("/api/vehicles",
+            new { plantId, code, type = "TransitMixer", capacityCft, plateNumber = $"DHK-{code}", status });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<VehicleDto>(ApiFactory.Json))!.Id;
     }

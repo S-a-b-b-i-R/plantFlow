@@ -349,10 +349,15 @@ public class ProductionController(PlantFlowDbContext db, ICurrentUser currentUse
 
         var truckId = request.TruckId!.Value;
         var truck = await db.Vehicles.AsNoTracking().Where(v => v.Id == truckId)
-            .Select(v => new { v.CapacityCft }).FirstOrDefaultAsync(cancellationToken);
-        if (truck is null || truckId == pour.PumpId)
+            .Select(v => new { v.CapacityCft, v.Type, v.Status }).FirstOrDefaultAsync(cancellationToken);
+        if (truck is null || truck.Type != VehicleType.TransitMixer)
         {
-            return Fail(StatusCodes.Status400BadRequest, "Choose a truck. The pump cannot carry a load.");
+            return Fail(StatusCodes.Status400BadRequest, "Choose a transit mixer. A pump cannot carry a load.");
+        }
+
+        if (truck.Status is VehicleStatus.Maintenance or VehicleStatus.Retired)
+        {
+            return Fail(StatusCodes.Status409Conflict, "That truck is in maintenance or retired.");
         }
 
         if (request.QuantityCft is { } requested && requested != Math.Round(requested, 2))

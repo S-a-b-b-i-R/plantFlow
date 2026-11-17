@@ -11,7 +11,7 @@ public partial class PourPlanningTests
 {
     private record Scene(Guid PlanId, Guid PourId, Guid OrderId, Guid Truck, Guid Pump);
 
-    // A confirmed pumped order with one pour planned. The second pump vehicle plays the truck.
+    // A confirmed pumped order with one pour planned. A transit mixer carries the loads.
     private async Task<Scene> ApprovedPourAsync(HttpClient admin, decimal cft = 100m, bool approve = true)
     {
         var fx = await SetupAsync(admin);
@@ -44,7 +44,7 @@ public partial class PourPlanningTests
             (await admin.PostAsJsonAsync($"/api/shift-plans/{plan.Plan.Id}/approve", new { })).EnsureSuccessStatusCode();
         }
 
-        return new Scene(plan.Plan.Id, pour.Id, orderId, fx.Pump2, fx.Pump);
+        return new Scene(plan.Plan.Id, pour.Id, orderId, fx.Mixer, fx.Pump);
     }
 
     private static Task<HttpResponseMessage> Step(HttpClient c, Guid loadId, string step, DateTime? at = null) =>

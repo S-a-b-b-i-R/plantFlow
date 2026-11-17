@@ -52,7 +52,7 @@ public partial class PourPlanningTests
             plan.Plan.Id,
             (await a.Content.ReadFromJsonAsync<PourDto>(ApiFactory.Json))!.Id,
             (await b.Content.ReadFromJsonAsync<PourDto>(ApiFactory.Json))!.Id,
-            fx.Pump2);
+            fx.Mixer);
     }
 
     private static async Task<LoadDto> ProduceLoadAsync(HttpClient c, Guid pourId, Guid truck, Guid? returnedConcreteId = null)
