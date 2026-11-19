@@ -31,6 +31,7 @@ export const PERMISSIONS = {
     ordersConfirm: "orders.confirm",
     ordersClose: "orders.close",
     ordersBillingResolve: "orders.billing.resolve",
+    usersManage: "users.manage",
 };
 
 export const can = (me: Me, permission: string) =>

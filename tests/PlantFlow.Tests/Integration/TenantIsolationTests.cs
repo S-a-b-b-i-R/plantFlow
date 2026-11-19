@@ -61,6 +61,24 @@ public class TenantIsolationTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Plants_of_another_company_cannot_be_assigned_to_a_user()
+    {
+        var a = await factory.CreateCompanyAsync();
+        var b = await factory.CreateCompanyAsync();
+        var plantOfA = await TestData.CreatePlantAsync(a.Admin.Client, "A1");
+        var memberOfB = await factory.AddMemberAsync(b);
+        var memberOfA = await factory.AddMemberAsync(a);
+
+        var borrow = await b.Admin.Client.PutAsJsonAsync(
+            $"/api/users/{memberOfB.Id}/plants", new { plantIds = new[] { plantOfA } });
+        var reach = await b.Admin.Client.PutAsJsonAsync(
+            $"/api/users/{memberOfA.Id}/plants", new { plantIds = Array.Empty<Guid>() });
+
+        Assert.Equal(HttpStatusCode.BadRequest, borrow.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, reach.StatusCode);
+    }
+
+    [Fact]
     public async Task The_audit_log_of_one_company_never_shows_another_companys_events()
     {
         var a = await factory.CreateCompanyAsync();

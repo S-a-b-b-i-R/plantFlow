@@ -457,6 +457,26 @@ namespace PlantFlow.Api.Migrations
                     b.ToTable("UserPermissions");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.Identity.UserPlant", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PlantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("UserId", "PlantId");
+
+                    b.HasIndex("PlantId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("UserPlants");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Identity.UserRole", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -2399,6 +2419,25 @@ namespace PlantFlow.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.Identity.UserPlant", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Plant", "Plant")
+                        .WithMany()
+                        .HasForeignKey("PlantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlantFlow.Api.Domain.Identity.User", "User")
+                        .WithMany("UserPlants")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plant");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Identity.UserRole", b =>
                 {
                     b.HasOne("PlantFlow.Api.Domain.Identity.Role", "Role")
@@ -3028,6 +3067,8 @@ namespace PlantFlow.Api.Migrations
             modelBuilder.Entity("PlantFlow.Api.Domain.Identity.User", b =>
                 {
                     b.Navigation("Permissions");
+
+                    b.Navigation("UserPlants");
 
                     b.Navigation("UserRoles");
                 });
