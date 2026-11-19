@@ -144,3 +144,49 @@ export const period = (
     to: string | null,
     format: (date: string) => string,
 ) => (to ? `${format(from)} to ${format(to)}` : `From ${format(from)}`);
+
+export type PriceScope = "CustomerAndPlant" | "Customer" | "Plant" | "General";
+
+export const scopeLabel: Record<PriceScope, string> = {
+    CustomerAndPlant: "This customer at this plant",
+    Customer: "This customer",
+    Plant: "This plant",
+    General: "General price",
+};
+
+export interface MarginRow {
+    productId: string;
+    productCode: string;
+    productName: string;
+    totalCost: number | null;
+    floorPrice: number | null;
+    activePrice: number | null;
+    priceScope: PriceScope | null;
+    marginAmount: number | null;
+    marginPercent: number | null;
+    belowFloor: boolean | null;
+    note: string | null;
+}
+
+export interface FloorBreakdown {
+    mixDesignVersion: number;
+    materials: {
+        materialCode: string;
+        unit: MaterialUnit;
+        quantityPerCft: number;
+        costPerUnit: number;
+        cost: number;
+    }[];
+    materialCost: number;
+    overhead: number;
+    fuel: number;
+    bridgeToll: number;
+    delivery: number;
+    totalCost: number;
+    marginPercent: number;
+    aitPercent: number;
+    floorPrice: number;
+    vatPercent: number;
+    vat: number;
+    floorPriceWithVat: number;
+}
