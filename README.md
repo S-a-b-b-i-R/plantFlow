@@ -57,6 +57,7 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 | React app: sign-in and approval flow, live operations board, batching console                        | Done    |
 | React screens: quality control, orders, approvals, confirmation and billing                          | Done    |
 | React screens: pricing (recipes, costs, selling prices, approvals)                                   | Done    |
+| Users assigned to the plants they work for, with a Users screen to choose them                       | Done    |
 | React screens: shift planning and administration                                                     | Planned |
 | Quarterly volume targets, customer volume ledger                                                     | Planned |
 
@@ -180,7 +181,7 @@ Integration tests start a throwaway SQL Server container (Docker must be running
 ## Roadmap
 
 1. **Shift planning screens in the web app**
-2. **Administration screens:** assigning users to companies, roles and permissions
+2. **Administration screens:** assigning users to companies, roles and permissions (assigning users to plants is done)
 3. **Targets and ledger:** quarterly volume targets against billed volume, customer volume ledger
 4. **Web tests:** component tests for the console and the board
 5. **Deployment:** a hosted demo
