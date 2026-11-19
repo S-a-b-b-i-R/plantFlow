@@ -3,6 +3,7 @@ import {
     LuActivity,
     LuClipboardList,
     LuFlaskConical,
+    LuTags,
     LuTruck,
 } from "react-icons/lu";
 import { can, PERMISSIONS } from "@/auth/permissions";
@@ -14,6 +15,8 @@ export type NavItem = {
     icon: IconType;
     // Every one of these is needed. The batching console also reads the live board.
     permissions: string[];
+    // When set, one of these is also needed.
+    anyOf?: string[];
 };
 
 export const navigation: NavItem[] = [
@@ -30,6 +33,18 @@ export const navigation: NavItem[] = [
         permissions: [PERMISSIONS.ordersView],
     },
     {
+        to: "/pricing",
+        label: "Pricing",
+        icon: LuTags,
+        permissions: [],
+        anyOf: [
+            PERMISSIONS.pricesView,
+            PERMISSIONS.mixDesignsView,
+            PERMISSIONS.costsManage,
+            PERMISSIONS.costsApprove,
+        ],
+    },
+    {
         to: "/operator",
         label: "Batching",
         icon: LuTruck,
@@ -44,7 +59,8 @@ export const navigation: NavItem[] = [
 ];
 
 export const canOpen = (me: Me, item: NavItem) =>
-    item.permissions.every((permission) => can(me, permission));
+    item.permissions.every((permission) => can(me, permission)) &&
+    (!item.anyOf || item.anyOf.some((permission) => can(me, permission)));
 
 // Where someone lands. People who sell, approve or bill start on orders, everyone else on the first screen they can use.
 export const firstAllowed = (me: Me) => {
