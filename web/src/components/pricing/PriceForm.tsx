@@ -2,14 +2,10 @@ import { useState } from "react";
 import { Field } from "@/components/orders/Field";
 import { inputClass } from "@/components/orders/styles";
 import { validAmount, type PriceRow } from "@/lib/pricing";
+import { CustomerPicker } from "./CustomerPicker";
 import { FormFrame } from "./FormFrame";
 import type { FormProps } from "./kind";
-import {
-    useBookSave,
-    useCustomerSearch,
-    usePlants,
-    useProducts,
-} from "./useBook";
+import { useBookSave, usePlants, useProducts } from "./useBook";
 
 export function PriceForm({ item, onDone, onCancel }: FormProps) {
     const row = item as PriceRow | null;
@@ -20,15 +16,9 @@ export function PriceForm({ item, onDone, onCancel }: FormProps) {
     const [plantId, setPlantId] = useState(row?.plantId ?? "");
     const [customerId, setCustomerId] = useState(row?.customerId ?? "");
     const [customerLabel, setCustomerLabel] = useState(row?.customerCode ?? "");
-    const [search, setSearch] = useState("");
     const [price, setPrice] = useState(row ? String(row.pricePerCft) : "");
     const [from, setFrom] = useState(row?.validFrom ?? "");
     const [to, setTo] = useState(row?.validTo ?? "");
-
-    const customers = useCustomerSearch(
-        search.trim(),
-        !customerId && search.trim().length >= 2,
-    );
 
     const body = {
         productId,
@@ -110,52 +100,14 @@ export function PriceForm({ item, onDone, onCancel }: FormProps) {
                 label="Customer"
                 hint="Leave on everyone for a general price."
             >
-                {customerId ? (
-                    <span className="flex h-10 items-center justify-between gap-2 rounded-sm border bg-muted/40 px-3 text-sm">
-                        <span className="font-medium">{customerLabel}</span>
-                        <button
-                            type="button"
-                            className="text-muted-foreground underline"
-                            onClick={() => {
-                                setCustomerId("");
-                                setCustomerLabel("");
-                            }}
-                        >
-                            Change
-                        </button>
-                    </span>
-                ) : (
-                    <>
-                        <input
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Everyone. Type 2 letters to pick one customer"
-                            className={inputClass}
-                        />
-                        {customers.data && customers.data.items.length > 0 && (
-                            <ul className="mt-1 divide-y rounded-sm border bg-card text-sm">
-                                {customers.data.items.map((c) => (
-                                    <li key={c.id}>
-                                        <button
-                                            type="button"
-                                            className="w-full px-3 py-2 text-left hover:bg-muted/40"
-                                            onClick={() => {
-                                                setCustomerId(c.id);
-                                                setCustomerLabel(c.code);
-                                                setSearch("");
-                                            }}
-                                        >
-                                            <span className="font-medium">
-                                                {c.code}
-                                            </span>{" "}
-                                            {c.name}
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </>
-                )}
+                <CustomerPicker
+                    label={customerLabel}
+                    placeholder="Everyone. Type 2 letters to pick one customer"
+                    onPick={(c) => {
+                        setCustomerId(c?.id ?? "");
+                        setCustomerLabel(c?.code ?? "");
+                    }}
+                />
             </Field>
             <Field label="Valid from">
                 <input

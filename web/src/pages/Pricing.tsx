@@ -1,8 +1,9 @@
 import { Navigate, NavLink, useParams } from "react-router-dom";
-import { can } from "@/auth/permissions";
+import { can, PERMISSIONS } from "@/auth/permissions";
 import { useMe } from "@/auth/useMe";
 import { panelClass } from "@/components/orders/styles";
 import { kinds } from "@/components/pricing/kinds";
+import { MarginReport } from "@/components/pricing/MarginReport";
 import { PendingSection, PricingList } from "@/components/pricing/PricingList";
 import { usePendingTotal } from "@/components/pricing/useBook";
 import type { PriceBookKind } from "@/components/pricing/kind";
@@ -16,7 +17,7 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
             : "bg-card hover:border-ink",
     );
 
-// The five kinds of row that make up the price book, one tab each, plus an inbox of what waits for this person.
+// The five kinds of row that make up the price book, one tab each, an inbox of what waits for this person, and the cost and margin report.
 export function Pricing() {
     const me = useMe().data!;
     const { tab } = useParams();
@@ -27,17 +28,21 @@ export function Pricing() {
     if (visible.length === 0) return <Navigate to="/" replace />;
 
     const hasInbox = deciding.length > 0;
+    const hasMargins = can(me, PERMISSIONS.costsManage);
     const current = visible.find((k) => k.key === tab);
-    if (tab !== "approvals" && !current) {
+    const known =
+        tab === "approvals"
+            ? hasInbox
+            : tab === "margins"
+              ? hasMargins
+              : !!current;
+    if (!known) {
         return (
             <Navigate
                 to={`/pricing/${hasInbox ? "approvals" : visible[0].key}`}
                 replace
             />
         );
-    }
-    if (tab === "approvals" && !hasInbox) {
-        return <Navigate to={`/pricing/${visible[0].key}`} replace />;
     }
 
     return (
@@ -70,10 +75,17 @@ export function Pricing() {
                         {k.label}
                     </NavLink>
                 ))}
+                {hasMargins && (
+                    <NavLink to="/pricing/margins" className={tabClass}>
+                        Cost and margin
+                    </NavLink>
+                )}
             </nav>
 
             {current ? (
                 <PricingList key={current.key} kind={current} />
+            ) : tab === "margins" ? (
+                <MarginReport />
             ) : (
                 <Inbox kinds={deciding} />
             )}
