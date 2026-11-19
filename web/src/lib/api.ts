@@ -41,3 +41,19 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
 }
+
+// Downloads a file the API protects, such as a survey photo, as a blob.
+export async function apiBlob(path: string): Promise<Blob> {
+    const token = await auth.currentUser?.getIdToken();
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    const response = await fetch(`${base}${path}`, { headers });
+    if (!response.ok) {
+        throw new ApiError(
+            response.status,
+            `The file could not be loaded (${response.status}).`,
+        );
+    }
+    return response.blob();
+}

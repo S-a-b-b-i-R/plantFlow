@@ -4,6 +4,7 @@ import {
     LuCalendarDays,
     LuClipboardList,
     LuFlaskConical,
+    LuMapPinned,
     LuTags,
     LuTruck,
 } from "react-icons/lu";
@@ -40,6 +41,13 @@ export const navigation: NavItem[] = [
         icon: LuCalendarDays,
         permissions: [PERMISSIONS.masterDataView],
         anyOf: [PERMISSIONS.deliveriesPlan, PERMISSIONS.deliveriesPlanApprove],
+    },
+    {
+        // Finding a site needs the customer and site lists, which are master data.
+        to: "/surveys",
+        label: "Surveys",
+        icon: LuMapPinned,
+        permissions: [PERMISSIONS.siteSurveysView, PERMISSIONS.masterDataView],
     },
     {
         to: "/pricing",
