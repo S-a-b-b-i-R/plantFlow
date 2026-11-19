@@ -7,6 +7,15 @@ export const resultLabel: Record<SurveyResult, string> = {
     NotOk: "Not OK",
 };
 
+// A plant manager reviews every survey. Only an approved one counts for planning.
+export type SurveyStatus = "Pending" | "Approved" | "Rejected";
+
+export const statusLabel: Record<SurveyStatus, string> = {
+    Pending: "Waiting for approval",
+    Approved: "Approved",
+    Rejected: "Sent back",
+};
+
 export interface SurveyImage {
     id: string;
     fileName: string;
@@ -35,6 +44,26 @@ export interface SiteSurvey {
     // The order whose request it answered. Empty on surveys recorded before surveys came from orders.
     orderId: string | null;
     orderNumber: string | null;
+    status: SurveyStatus;
+    reviewedBy: string | null;
+    reviewedAtUtc: string | null;
+    // Why it was sent back.
+    reviewComment: string | null;
+}
+
+// A survey waiting for a plant manager, with the order it was recorded for.
+export interface SurveyApproval {
+    survey: SiteSurvey;
+    customerName: string;
+    plantId: string;
+    plantCode: string;
+    requestedDate: string;
+}
+
+export interface SurveyApprovals {
+    // False for an approver with no plants assigned.
+    approvesForAnyPlant: boolean;
+    surveys: SurveyApproval[];
 }
 
 // An order waiting for a new survey, as it shows in the surveyor work queue.
@@ -54,9 +83,11 @@ export interface SurveyRequest {
     requestedDate: string;
     surveyRequestedAtUtc: string | null;
     hasPumpLines: boolean;
+    // Why the last survey for this order was sent back, if it was.
+    sentBackReason: string | null;
 }
 
-// An order can tag one of its site's last this many surveys.
+// An order can tag one of its site's last this many approved surveys.
 export const TAGGABLE_SURVEYS = 3;
 
 export interface Site {

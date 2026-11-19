@@ -13,6 +13,9 @@ public class SiteSurveyConfiguration : IEntityTypeConfiguration<SiteSurvey>
     {
         builder.HasKey(s => s.Id);
         builder.Property(s => s.Result).HasConversion<string>().HasMaxLength(10);
+        builder.Property(s => s.Status).HasConversion<string>().HasMaxLength(10);
+        builder.Property(s => s.ReviewComment).HasMaxLength(500);
+        builder.HasIndex(s => s.Status);
         builder.Property(s => s.Notes).HasMaxLength(1000);
         builder.Property(s => s.Latitude).HasPrecision(9, 6);
         builder.Property(s => s.Longitude).HasPrecision(9, 6);

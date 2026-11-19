@@ -1,31 +1,97 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { LuChevronRight, LuMapPin } from "react-icons/lu";
 import { can, PERMISSIONS } from "@/auth/permissions";
 import { useMe } from "@/auth/useMe";
 import { panelClass } from "@/components/orders/styles";
-import { useSurveyRequests } from "@/components/surveys/useSurveys";
+import { ApprovalQueue } from "@/components/surveys/ApprovalQueue";
+import {
+    useSurveyApprovals,
+    useSurveyRequests,
+} from "@/components/surveys/useSurveys";
 import { Skeleton } from "@/components/ui/skeleton";
 import { shortDate } from "@/lib/orders";
 import { mapLink } from "@/lib/surveys";
 import { cn } from "@/lib/utils";
 
-// The surveyor work queue: orders that asked for a new site survey, soonest pour first.
-// Only the plants the surveyor works for are listed (all plants when none are assigned).
+const tabClass = (active: boolean) =>
+    cn(
+        "flex min-h-11 items-center gap-2 border-b-[3px] px-3 text-sm font-medium",
+        active
+            ? "border-signal text-foreground"
+            : "border-transparent text-muted-foreground hover:text-foreground",
+    );
+
+// Two lists: orders waiting for a surveyor, and recorded surveys waiting for a plant manager.
+// Each person sees the tabs their permissions allow. A plant manager who only approves lands on To approve.
 export function Surveys() {
     const me = useMe().data!;
     const canPerform = can(me, PERMISSIONS.siteSurveysPerform);
-    const requests = useSurveyRequests(canPerform);
+    const canApprove = can(me, PERMISSIONS.siteSurveysApprove);
+    const approvals = useSurveyApprovals(canApprove);
+    const [params, setParams] = useSearchParams();
+    const tab =
+        canApprove && (params.get("tab") === "approve" || !canPerform)
+            ? "approve"
+            : "requests";
+    const waiting = approvals.data?.surveys.length ?? 0;
 
     return (
         <div className="mx-auto max-w-2xl space-y-4">
             <header>
                 <h1 className="display text-4xl leading-none">Site surveys</h1>
-                <p className="mt-2 text-sm text-muted-foreground">
-                    Orders waiting for a survey. Go to the site, then record
-                    what you see there: where it is, how to reach it and where
-                    the pump goes.
-                </p>
             </header>
+
+            {canApprove && (
+                <nav className="flex border-b" aria-label="Survey lists">
+                    {canPerform && (
+                        <button
+                            type="button"
+                            className={tabClass(tab === "requests")}
+                            aria-current={
+                                tab === "requests" ? "page" : undefined
+                            }
+                            onClick={() => setParams({})}
+                        >
+                            Requests
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        className={tabClass(tab === "approve")}
+                        aria-current={tab === "approve" ? "page" : undefined}
+                        onClick={() => setParams({ tab: "approve" })}
+                    >
+                        To approve
+                        {waiting > 0 && (
+                            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-signal px-1.5 text-xs font-bold text-ink">
+                                {waiting}
+                            </span>
+                        )}
+                    </button>
+                </nav>
+            )}
+
+            {tab === "approve" ? (
+                <ApprovalQueue approvals={approvals} />
+            ) : (
+                <RequestQueue canPerform={canPerform} />
+            )}
+        </div>
+    );
+}
+
+// The surveyor work queue: orders that asked for a new site survey, soonest pour first.
+// Only the plants the surveyor works for are listed (all plants when none are assigned).
+function RequestQueue({ canPerform }: { canPerform: boolean }) {
+    const requests = useSurveyRequests(canPerform);
+
+    return (
+        <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+                Orders waiting for a survey. Go to the site, then record what
+                you see there: where it is, how to reach it and where the pump
+                goes.
+            </p>
 
             {!canPerform && (
                 <p className="text-sm text-muted-foreground">
@@ -76,6 +142,14 @@ export function Surveys() {
                                     · pour {shortDate(request.requestedDate)}
                                     {request.hasPumpLines && " · pump job"}
                                 </span>
+                                {request.sentBackReason && (
+                                    <span className="mt-1 block text-sm text-late">
+                                        <span className="font-semibold">
+                                            Last survey sent back:
+                                        </span>{" "}
+                                        {request.sentBackReason}
+                                    </span>
+                                )}
                             </span>
                             <LuChevronRight
                                 aria-hidden

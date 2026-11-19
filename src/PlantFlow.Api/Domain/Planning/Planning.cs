@@ -6,6 +6,9 @@ namespace PlantFlow.Api.Domain.Planning;
 
 public enum SurveyResult { Ok, NotOk }
 
+// A plant manager of the order's plant reviews every survey. Only an approved survey counts for planning.
+public enum SurveyStatus { Pending, Approved, Rejected }
+
 // A site visit that says whether concrete can be poured there, and how to get to it and set up.
 public class SiteSurvey : ITenantOwned
 {
@@ -39,6 +42,13 @@ public class SiteSurvey : ITenantOwned
 
     public Guid? SurveyedBy { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    // A reviewed survey is never edited: a rejected one stays as history and a new survey replaces it.
+    public SurveyStatus Status { get; set; } = SurveyStatus.Pending;
+    public Guid? ReviewedBy { get; set; }
+    public DateTime? ReviewedAtUtc { get; set; }
+    // The reason it was sent back.
+    public string? ReviewComment { get; set; }
 
     public List<SiteSurveyImage> Images { get; set; } = [];
 }

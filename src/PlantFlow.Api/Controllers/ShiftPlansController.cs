@@ -426,9 +426,19 @@ public class ShiftPlansController(
                 return Clash("This order has no survey. Tag one of the site's surveys or request a new one on the order.");
             }
 
-            var result = await db.SiteSurveys.AsNoTracking().Where(s => s.Id == tagged)
-                .Select(s => (SurveyResult?)s.Result).FirstOrDefaultAsync(cancellationToken);
-            if (result != SurveyResult.Ok)
+            var survey = await db.SiteSurveys.AsNoTracking().Where(s => s.Id == tagged)
+                .Select(s => new { s.Result, s.Status }).FirstAsync(cancellationToken);
+            if (survey.Status == SurveyStatus.Pending)
+            {
+                return Clash("The survey tagged on this order is waiting for the plant manager's approval.");
+            }
+
+            if (survey.Status == SurveyStatus.Rejected)
+            {
+                return Clash("The survey tagged on this order was sent back. Tag another survey or request a new one.");
+            }
+
+            if (survey.Result != SurveyResult.Ok)
             {
                 return Clash("The survey tagged on this order needs an OK result before this pour can be planned.");
             }

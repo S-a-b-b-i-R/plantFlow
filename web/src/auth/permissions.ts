@@ -22,6 +22,7 @@ export const PERMISSIONS = {
     siteSurveysView: "sitesurveys.view",
     siteSurveysPerform: "sitesurveys.perform",
     siteSurveysAttach: "sitesurveys.attach",
+    siteSurveysApprove: "sitesurveys.approve",
     ordersView: "orders.view",
     ordersCreate: "orders.create",
     ordersEdit: "orders.edit",

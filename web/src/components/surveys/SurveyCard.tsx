@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { LuCamera, LuMapPin, LuX } from "react-icons/lu";
 import { OpButton as Button } from "@/components/operator/OpButton";
 import { panelClass } from "@/components/orders/styles";
@@ -8,6 +8,7 @@ import {
     MAX_PHOTOS,
     preparePhoto,
     resultLabel,
+    statusLabel,
     type SiteSurvey,
     type SurveyImage,
 } from "@/lib/surveys";
@@ -66,15 +67,17 @@ function Photo({
     );
 }
 
-// One survey: the verdict, where it was, how to set up the pump, and the photos.
+// One survey: the verdict, its approval, where it was, how to set up the pump, and the photos.
 export function SurveyCard({
     survey,
     latest,
     canAttach,
+    actions,
 }: {
     survey: SiteSurvey;
     latest: boolean;
     canAttach: boolean;
+    actions?: ReactNode;
 }) {
     const add = useAddPhoto(survey.siteId);
     const remove = useRemovePhoto(survey.siteId);
@@ -114,6 +117,18 @@ export function SurveyCard({
                     >
                         {resultLabel[survey.result]}
                     </span>
+                    {survey.status !== "Approved" && (
+                        <span
+                            className={cn(
+                                "inline-flex items-center rounded-sm border px-2 py-0.5 text-xs font-semibold",
+                                survey.status === "Rejected"
+                                    ? "border-late/40 text-late"
+                                    : "border-ink/30",
+                            )}
+                        >
+                            {statusLabel[survey.status]}
+                        </span>
+                    )}
                     {latest && (
                         <span className="text-xs text-muted-foreground">
                             Latest
@@ -129,6 +144,13 @@ export function SurveyCard({
                     )}
                 </span>
             </header>
+
+            {survey.status === "Rejected" && survey.reviewComment && (
+                <p className="rounded-sm border border-late/40 bg-late/5 p-2 text-sm">
+                    <span className="font-semibold">Sent back: </span>
+                    {survey.reviewComment}
+                </p>
+            )}
 
             {survey.latitude !== null && survey.longitude !== null && (
                 <a
@@ -223,6 +245,8 @@ export function SurveyCard({
                     )}
                 </div>
             )}
+
+            {actions}
         </article>
     );
 }

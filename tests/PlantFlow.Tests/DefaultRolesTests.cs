@@ -23,6 +23,15 @@ public class DefaultRolesTests
     }
 
     [Fact]
+    public void Only_plant_managers_and_admins_approve_site_surveys_and_plant_managers_can_see_them()
+    {
+        var approvers = DefaultRoles.All.Where(r => r.Value.Contains(Permissions.SiteSurveysApprove)).Select(r => r.Key);
+
+        Assert.Equal(["Admin", "Plant Manager"], approvers.Order());
+        Assert.Contains(Permissions.SiteSurveysView, DefaultRoles.All["Plant Manager"]);
+    }
+
+    [Fact]
     public void Admin_role_has_every_permission()
     {
         Assert.Equal(Permissions.All.Order(), DefaultRoles.All["Admin"].Order());

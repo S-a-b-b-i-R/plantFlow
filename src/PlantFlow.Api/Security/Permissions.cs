@@ -40,6 +40,7 @@ public static class Permissions
     public const string SiteSurveysView = "sitesurveys.view";
     public const string SiteSurveysPerform = "sitesurveys.perform";
     public const string SiteSurveysAttach = "sitesurveys.attach";
+    public const string SiteSurveysApprove = "sitesurveys.approve";
 
     // Delivery, batching and returns
     public const string DeliveriesPlan = "deliveries.plan";

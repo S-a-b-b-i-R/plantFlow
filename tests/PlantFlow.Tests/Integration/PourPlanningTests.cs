@@ -161,7 +161,12 @@ public partial class PourPlanningTests(ApiFactory factory)
         Assert.Contains("A new survey was requested for this order and is not recorded yet.", await waiting.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.Created, (await PourAsync(admin, id, fx.ChuteLine, 20m, "09:00:00")).StatusCode);
 
-        await RecordSurveyAsync(admin, fx.OrderId, "NotOk", "2026-05-30");
+        // A recorded survey counts only once the plant manager approves it, and an approved Not OK still blocks.
+        var pending = await RecordSurveyAsync(admin, fx.OrderId, "NotOk", "2026-05-30", approve: false);
+        var unapproved = await PourAsync(admin, id, fx.PumpLine, 10m, "09:00:00", fx.Pump);
+        Assert.Equal(HttpStatusCode.Conflict, unapproved.StatusCode);
+        Assert.Contains("waiting for the plant manager", await unapproved.Content.ReadAsStringAsync());
+        (await admin.PostAsync($"/api/surveys/{pending.Id}/approve", null)).EnsureSuccessStatusCode();
         var notOk = await PourAsync(admin, id, fx.PumpLine, 10m, "09:00:00", fx.Pump);
         Assert.Equal(HttpStatusCode.Conflict, notOk.StatusCode);
         Assert.Contains("needs an OK result", await notOk.Content.ReadAsStringAsync());
@@ -398,7 +403,7 @@ public partial class PourPlanningTests(ApiFactory factory)
         var fromSiteB = await SurveyAsync(atSiteB, "Ok", "2026-06-01");
         var otherSite = await admin.PostAsJsonAsync("/api/orders", OrderBody(fx.W, pumped, surveyId: fromSiteB));
         Assert.Equal(HttpStatusCode.BadRequest, otherSite.StatusCode);
-        Assert.Contains("Tag one of this site's last three surveys.", await otherSite.Content.ReadAsStringAsync());
+        Assert.Contains("Tag one of this site's last three approved surveys.", await otherSite.Content.ReadAsStringAsync());
 
         // Once three newer surveys of the site exist, the oldest is no longer among the last three.
         await SurveyAsync(fx.W, "Ok", "2026-06-02");
