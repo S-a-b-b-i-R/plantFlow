@@ -157,6 +157,7 @@ public class OrderTests(ApiFactory factory)
             requestedDate = "2026-06-02",
             distanceKm = 20m,
             paymentTerms = "30 days",
+            requestSurvey = true, // the slab is now pumped, so the order asks for a survey
             lines = new object[]
             {
                 new { id = keep.Id, productId = w.ProductId, quantityCft = 15m, pourElement = "Slab", pourMethod = "Pump" },

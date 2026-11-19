@@ -14,6 +14,7 @@ public partial class PourPlanningTests
     private async Task<Pair> TwoPoursAsync(HttpClient admin)
     {
         var fx = await SetupAsync(admin);
+        var survey = (await admin.GetFromJsonAsync<OrderDetailDto>($"/api/orders/{fx.OrderId}", ApiFactory.Json))!.Order.SurveyId;
 
         async Task<Guid> ConfirmedLineAsync(object line)
         {
@@ -24,6 +25,7 @@ public partial class PourPlanningTests
                 plantId = fx.W.PlantId,
                 requestedDate = "2026-06-01",
                 distanceKm = 5m,
+                surveyId = survey,
                 lines = new[] { line }
             });
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);

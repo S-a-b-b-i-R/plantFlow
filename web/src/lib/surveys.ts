@@ -32,7 +32,32 @@ export interface SiteSurvey {
     truckConnectionPoint: string | null;
     locationNote: string | null;
     images: SurveyImage[];
+    // The order whose request it answered. Empty on surveys recorded before surveys came from orders.
+    orderId: string | null;
+    orderNumber: string | null;
 }
+
+// An order waiting for a new survey, as it shows in the surveyor work queue.
+export interface SurveyRequest {
+    orderId: string;
+    orderNumber: string;
+    orderStatus: string;
+    customerName: string;
+    siteId: string;
+    siteName: string;
+    siteAddress: string | null;
+    siteLatitude: number | null;
+    siteLongitude: number | null;
+    siteAccessNotes: string | null;
+    plantId: string;
+    plantCode: string;
+    requestedDate: string;
+    surveyRequestedAtUtc: string | null;
+    hasPumpLines: boolean;
+}
+
+// An order can tag one of its site's last this many surveys.
+export const TAGGABLE_SURVEYS = 3;
 
 export interface Site {
     id: string;

@@ -28,6 +28,10 @@ public class SiteSurveyConfiguration : IEntityTypeConfiguration<SiteSurvey>
 
         // An order can tag a survey.
         builder.HasMany<Order>().WithOne().HasForeignKey(o => o.SiteSurveyId).OnDelete(DeleteBehavior.Restrict);
+
+        // The order whose request the survey answered.
+        builder.HasOne(s => s.Order).WithMany().HasForeignKey(s => s.OrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(s => s.OrderId);
     }
 }
 

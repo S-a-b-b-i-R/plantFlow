@@ -7,6 +7,7 @@ import { Journey } from "@/components/orders/Journey";
 import { LinesPanel } from "@/components/orders/LinesPanel";
 import { OrderActions } from "@/components/orders/OrderActions";
 import { StatusChip } from "@/components/orders/StatusChip";
+import { SurveyPanel } from "@/components/orders/SurveyPanel";
 import { panelClass } from "@/components/orders/styles";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, api } from "@/lib/api";
@@ -147,6 +148,8 @@ export function OrderPage() {
             </dl>
 
             <LinesPanel lines={detail.lines} charges={detail.charges} />
+
+            <SurveyPanel order={order} />
 
             {!deciding && (
                 <ApprovalsPanel

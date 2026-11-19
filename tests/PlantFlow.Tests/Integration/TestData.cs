@@ -134,8 +134,38 @@ public static class TestData
     public static object LineBody(Guid productId, decimal qty, decimal? unitPrice = null, string element = "Slab", string method = "Chute") =>
         new { productId, quantityCft = qty, unitPrice, pourElement = element, pourMethod = method };
 
-    public static object OrderBody(OrderWorld w, object[] lines, decimal? distanceKm = 5m, string date = "2026-06-01") =>
-        new { customerId = w.CustomerId, siteId = w.SiteId, plantId = w.PlantId, requestedDate = date, distanceKm, lines };
+    // Under the default PumpJobs survey rule an order with a pumped line needs a survey, so unless told
+    // otherwise such an order asks for a new one.
+    public static object OrderBody(
+        OrderWorld w, object[] lines, decimal? distanceKm = 5m, string date = "2026-06-01",
+        bool? requestSurvey = null, Guid? surveyId = null) =>
+        new
+        {
+            customerId = w.CustomerId, siteId = w.SiteId, plantId = w.PlantId, requestedDate = date, distanceKm, lines,
+            surveyId,
+            requestSurvey = requestSurvey ?? (surveyId is null && lines.Any(IsPumped))
+        };
+
+    private static bool IsPumped(object line) =>
+        line.GetType().GetProperty("pourMethod")?.GetValue(line) as string == "Pump";
+
+    public static object SurveyBody(string result = "Ok", string date = "2026-05-30") =>
+        new { surveyedOn = date, result, latitude = 23.8103m, longitude = 90.4125m, accuracyMeters = 8m };
+
+    public static Task<HttpResponseMessage> RequestSurveyAsync(HttpClient client, Guid orderId) =>
+        client.PutAsJsonAsync($"/api/orders/{orderId}/survey", new { requestSurvey = true });
+
+    public static Task<HttpResponseMessage> TagSurveyAsync(HttpClient client, Guid orderId, Guid? surveyId) =>
+        client.PutAsJsonAsync($"/api/orders/{orderId}/survey", new { surveyId });
+
+    // Records the survey an order asked for. The order must have an open request.
+    public static async Task<SiteSurveyDto> RecordSurveyAsync(
+        HttpClient client, Guid orderId, string result = "Ok", string date = "2026-05-30")
+    {
+        var response = await client.PostAsJsonAsync($"/api/orders/{orderId}/surveys", SurveyBody(result, date));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<SiteSurveyDto>(ApiFactory.Json))!;
+    }
 
     public static async Task<OrderDetailDto> CreateDraftAsync(HttpClient client, OrderWorld w, object[] lines)
     {
@@ -145,9 +175,12 @@ public static class TestData
     }
 
     // Created, submitted, approved by the sales manager and confirmed. The list price of 120 is above the floor.
-    public static async Task<OrderDetailDto> CreateConfirmedAsync(HttpClient admin, OrderWorld w, object[] lines)
+    public static async Task<OrderDetailDto> CreateConfirmedAsync(
+        HttpClient admin, OrderWorld w, object[] lines, Guid? surveyId = null, bool? requestSurvey = null)
     {
-        var draft = await CreateDraftAsync(admin, w, lines);
+        var created = await admin.PostAsJsonAsync("/api/orders", OrderBody(w, lines, surveyId: surveyId, requestSurvey: requestSurvey));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var draft = (await created.Content.ReadFromJsonAsync<OrderDetailDto>(ApiFactory.Json))!;
         (await admin.PostAsync($"/api/orders/{draft.Order.Id}/submit", null)).EnsureSuccessStatusCode();
         (await admin.PostAsJsonAsync($"/api/orders/{draft.Order.Id}/approvals/sales-manager/approve",
             new { comment = (string?)null })).EnsureSuccessStatusCode();

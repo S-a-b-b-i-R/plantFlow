@@ -1397,6 +1397,15 @@ namespace PlantFlow.Api.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<bool>("SurveyRequested")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("SurveyRequestedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("SurveyRequestedBy")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1423,6 +1432,9 @@ namespace PlantFlow.Api.Migrations
                     b.HasIndex("SiteId");
 
                     b.HasIndex("SiteSurveyId");
+
+                    b.HasIndex("SurveyRequested")
+                        .HasFilter("[SurveyRequested] = 1");
 
                     b.HasIndex("TenantId", "CustomerId");
 
@@ -1970,6 +1982,9 @@ namespace PlantFlow.Api.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<decimal?>("PipingMetres")
                         .HasPrecision(6, 1)
                         .HasColumnType("decimal(6,1)");
@@ -2000,6 +2015,8 @@ namespace PlantFlow.Api.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
 
                     b.HasIndex("TenantId");
 
@@ -2959,6 +2976,11 @@ namespace PlantFlow.Api.Migrations
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Planning.SiteSurvey", b =>
                 {
+                    b.HasOne("PlantFlow.Api.Domain.Orders.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("PlantFlow.Api.Domain.MasterData.Site", "Site")
                         .WithMany()
                         .HasForeignKey("SiteId")
@@ -2970,6 +2992,8 @@ namespace PlantFlow.Api.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Order");
 
                     b.Navigation("Site");
                 });

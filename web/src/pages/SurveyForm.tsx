@@ -16,8 +16,13 @@ import {
     panelClass,
     textareaClass,
 } from "@/components/orders/styles";
-import { uploadPhoto, useSite } from "@/components/surveys/useSurveys";
-import { api } from "@/lib/api";
+import {
+    uploadPhoto,
+    useSurveyRequest,
+} from "@/components/surveys/useSurveys";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ApiError, api } from "@/lib/api";
+import { shortDate } from "@/lib/orders";
 import { todayIso } from "@/lib/planning";
 import {
     GOOD_ACCURACY_METERS,
@@ -41,12 +46,14 @@ type Photo = {
 
 const choices: SurveyResult[] = ["Ok", "NotOk"];
 
-// A survey, filled in on the phone at the site: the verdict, the position, the pump setup and up to three photos.
+// A survey for an order that asked for one, filled in on the phone at the site: the verdict, the position,
+// the pump setup and up to three photos. Saving it answers the request and tags it on the order.
 export function SurveyForm() {
-    const { siteId } = useParams();
+    const { orderId } = useParams();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
-    const site = useSite(siteId!);
+    const request = useSurveyRequest(orderId!);
+    const siteId = request.data?.siteId;
 
     const [result, setResult] = useState<SurveyResult | null>(null);
     const [date, setDate] = useState(todayIso);
@@ -119,14 +126,19 @@ export function SurveyForm() {
         (Number(piping) >= 0 &&
             Number(piping) <= 10000 &&
             Math.round(Number(piping) * 10) / 10 === Number(piping));
-    const ready = result !== null && position !== null && !!date && pipingOk;
+    const ready =
+        !!request.data &&
+        result !== null &&
+        position !== null &&
+        !!date &&
+        pipingOk;
 
     const save = useMutation({
         mutationFn: async () => {
             let id = savedId;
             if (!id) {
                 const created = await api<SiteSurvey>(
-                    `/api/sites/${siteId}/surveys`,
+                    `/api/orders/${orderId}/surveys`,
                     {
                         method: "POST",
                         body: JSON.stringify({
@@ -157,7 +169,7 @@ export function SurveyForm() {
                 );
             }
         },
-        onSuccess: () => navigate(`/surveys/${siteId}`),
+        onSuccess: () => navigate(siteId ? `/surveys/${siteId}` : "/surveys"),
         onSettled: () =>
             queryClient.invalidateQueries({ queryKey: ["surveys"] }),
     });
@@ -174,20 +186,46 @@ export function SurveyForm() {
             className="mx-auto max-w-2xl space-y-6 pb-4"
         >
             <Link
-                to={`/surveys/${siteId}`}
+                to="/surveys"
                 className="inline-flex h-10 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
                 <LuChevronLeft aria-hidden className="size-4" />
-                {site.data?.name ?? "Site"}
+                Survey requests
             </Link>
 
             <header>
                 <h1 className="display text-4xl leading-none">New survey</h1>
-                {site.data && (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                        {site.data.name}
-                        {site.data.address ? ` · ${site.data.address}` : ""}
+                {request.isLoading && <Skeleton className="mt-2 h-10 w-full" />}
+                {request.isError && (
+                    <p role="alert" className="mt-2 text-sm text-late">
+                        {request.error instanceof ApiError &&
+                        request.error.status === 404
+                            ? "This order is not waiting for a survey, or it is for a plant you do not work for."
+                            : request.error.message}
                     </p>
+                )}
+                {request.data && (
+                    <>
+                        <p className="mt-2 font-semibold">
+                            {request.data.siteName}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            {request.data.customerName}
+                            {request.data.siteAddress
+                                ? ` · ${request.data.siteAddress}`
+                                : ""}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            For {request.data.orderNumber} ·{" "}
+                            {request.data.plantCode} · pour{" "}
+                            {shortDate(request.data.requestedDate)}
+                        </p>
+                        {request.data.siteAccessNotes && (
+                            <p className="mt-1 text-sm">
+                                {request.data.siteAccessNotes}
+                            </p>
+                        )}
+                    </>
                 )}
             </header>
 

@@ -26,9 +26,20 @@ public class SiteSurveyTests(ApiFactory factory)
             notes = "Gate is 3 m wide"
         };
 
-    private static async Task<SiteSurveyDto> CreateAsync(HttpClient c, Guid siteId, object body)
+    // A pumped draft order, which asks for a new survey.
+    private static async Task<OrderDetailDto> RequestingOrderAsync(HttpClient c, OrderWorld w, string date = "2026-06-01")
     {
-        var response = await c.PostAsJsonAsync($"/api/sites/{siteId}/surveys", body);
+        var response = await c.PostAsJsonAsync("/api/orders",
+            OrderBody(w, [LineBody(w.ProductId, 10m, null, "Slab", "Pump")], date: date));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var order = (await response.Content.ReadFromJsonAsync<OrderDetailDto>(ApiFactory.Json))!;
+        Assert.True(order.Order.SurveyRequested);
+        return order;
+    }
+
+    private static async Task<SiteSurveyDto> CreateAsync(HttpClient c, Guid orderId, object body)
+    {
+        var response = await c.PostAsJsonAsync($"/api/orders/{orderId}/surveys", body);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<SiteSurveyDto>(ApiFactory.Json))!;
     }
@@ -55,15 +66,22 @@ public class SiteSurveyTests(ApiFactory factory)
     private static Task<List<SiteSurveyDto>?> ForSiteAsync(HttpClient c, Guid siteId) =>
         c.GetFromJsonAsync<List<SiteSurveyDto>>($"/api/sites/{siteId}/surveys", ApiFactory.Json);
 
+    private static async Task AssertProblemAsync(HttpResponseMessage response, HttpStatusCode status, string title)
+    {
+        Assert.Equal(status, response.StatusCode);
+        Assert.Contains(title, await response.Content.ReadAsStringAsync());
+    }
+
     [Fact]
-    public async Task A_survey_needs_a_position_and_keeps_the_instructions()
+    public async Task A_survey_needs_a_position_keeps_the_instructions_and_answers_the_orders_request()
     {
         var company = await factory.CreateCompanyAsync();
         var admin = company.Admin.Client;
         var w = await CreateOrderWorldAsync(admin);
         var rep = await factory.AddMemberAsync(company, "Sales Representative");
         var technical = await factory.AddMemberAsync(company, "Technical");
-        var url = $"/api/sites/{w.SiteId}/surveys";
+        var order = await RequestingOrderAsync(admin, w);
+        var url = $"/api/orders/{order.Order.Id}/surveys";
 
         var noPosition = await admin.PostAsJsonAsync(url, new { surveyedOn = "2026-05-30", result = "Ok" });
         var badLatitude = await admin.PostAsJsonAsync(url, Body(latitude: 95m));
@@ -74,9 +92,11 @@ public class SiteSurveyTests(ApiFactory factory)
 
         // A rep can read surveys but not make them. The technical team can.
         Assert.Equal(HttpStatusCode.Forbidden, (await rep.Client.PostAsJsonAsync(url, Body())).StatusCode);
-        var survey = await CreateAsync(technical.Client, w.SiteId, Body());
+        var survey = await CreateAsync(technical.Client, order.Order.Id, Body());
 
         Assert.Equal("Tower A", survey.SiteName);
+        Assert.Equal(order.Order.Id, survey.OrderId);
+        Assert.Equal(order.Order.Number, survey.OrderNumber);
         Assert.Equal(23.8103m, survey.Latitude);
         Assert.Equal(90.4125m, survey.Longitude);
         Assert.Equal(8m, survey.AccuracyMeters);
@@ -86,9 +106,94 @@ public class SiteSurveyTests(ApiFactory factory)
         Assert.Equal("Turn left after the tall blue building", survey.LocationNote);
         Assert.Empty(survey.Images);
 
+        // The order now relies on it and is no longer waiting.
+        var after = (await admin.GetFromJsonAsync<OrderDetailDto>($"/api/orders/{order.Order.Id}", ApiFactory.Json))!;
+        Assert.Equal(survey.Id, after.Order.SurveyId);
+        Assert.False(after.Order.SurveyRequested);
+
         var listed = Assert.Single((await ForSiteAsync(rep.Client, w.SiteId))!);
         Assert.Equal(survey.Id, listed.Id);
         Assert.Equal("Turn left after the tall blue building", listed.LocationNote);
+    }
+
+    [Fact]
+    public async Task A_survey_is_recorded_only_for_an_open_request()
+    {
+        var company = await factory.CreateCompanyAsync();
+        var admin = company.Admin.Client;
+        var w = await CreateOrderWorldAsync(admin);
+
+        // No request: a chute order needs no survey.
+        var chute = await CreateDraftAsync(admin, w, [LineBody(w.ProductId, 10m)]);
+        await AssertProblemAsync(
+            await admin.PostAsJsonAsync($"/api/orders/{chute.Order.Id}/surveys", Body()),
+            HttpStatusCode.Conflict, "This order has not asked for a new survey. Request one on the order first.");
+
+        // Answered once: a second survey for the same request is refused.
+        var order = await RequestingOrderAsync(admin, w);
+        await CreateAsync(admin, order.Order.Id, Body());
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.PostAsJsonAsync($"/api/orders/{order.Order.Id}/surveys", Body())).StatusCode);
+
+        // A cancelled order no longer needs one.
+        var cancelled = await RequestingOrderAsync(admin, w);
+        (await admin.PostAsJsonAsync($"/api/orders/{cancelled.Order.Id}/cancel", new { reason = "Customer called off" }))
+            .EnsureSuccessStatusCode();
+        await AssertProblemAsync(
+            await admin.PostAsJsonAsync($"/api/orders/{cancelled.Order.Id}/surveys", Body()),
+            HttpStatusCode.Conflict, "This order is Cancelled, so it no longer needs a survey.");
+
+        // Another company's order is not found.
+        var other = (await factory.CreateCompanyAsync()).Admin.Client;
+        var open = await RequestingOrderAsync(admin, w);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsJsonAsync($"/api/orders/{open.Order.Id}/surveys", Body())).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_work_queue_shows_requests_for_the_surveyors_plants_soonest_first()
+    {
+        var company = await factory.CreateCompanyAsync();
+        var admin = company.Admin.Client;
+        var w = await CreateOrderWorldAsync(admin);
+        var northPlant = await CreatePlantAsync(admin, "N1");
+        var atNorth = w with { PlantId = northPlant };
+
+        var later = await RequestingOrderAsync(admin, w, "2026-06-05");
+        var sooner = await RequestingOrderAsync(admin, w, "2026-06-02");
+        var north = await RequestingOrderAsync(admin, atNorth, "2026-06-01");
+        await CreateDraftAsync(admin, w, [LineBody(w.ProductId, 10m)]); // no request
+
+        // A surveyor with no plants sees every request; one assigned to P1 sees only P1's.
+        var anywhere = await factory.AddMemberAsync(company, "Technical");
+        var p1Only = await factory.AddMemberAsync(company, "Technical");
+        (await admin.PutAsJsonAsync($"/api/users/{p1Only.Id}/plants", new { plantIds = new[] { w.PlantId } }))
+            .EnsureSuccessStatusCode();
+
+        var all = (await anywhere.Client.GetFromJsonAsync<List<SurveyRequestDto>>("/api/survey-requests", ApiFactory.Json))!;
+        Assert.Equal([north.Order.Id, sooner.Order.Id, later.Order.Id], all.Select(r => r.OrderId));
+
+        var mine = (await p1Only.Client.GetFromJsonAsync<List<SurveyRequestDto>>("/api/survey-requests", ApiFactory.Json))!;
+        Assert.Equal([sooner.Order.Id, later.Order.Id], mine.Select(r => r.OrderId));
+        Assert.Equal("Tower A", mine[0].SiteName);
+        Assert.Equal("P1", mine[0].PlantCode);
+        Assert.True(mine[0].HasPumpLines);
+
+        // The P1 surveyor cannot open or record the N1 request.
+        Assert.Equal(HttpStatusCode.NotFound, (await p1Only.Client.GetAsync($"/api/survey-requests/{north.Order.Id}")).StatusCode);
+        await AssertProblemAsync(
+            await p1Only.Client.PostAsJsonAsync($"/api/orders/{north.Order.Id}/surveys", Body()),
+            HttpStatusCode.Forbidden, "This order is for a plant you do not work for.");
+
+        // Recording a request takes it off the queue.
+        await CreateAsync(p1Only.Client, sooner.Order.Id, Body());
+        mine = (await p1Only.Client.GetFromJsonAsync<List<SurveyRequestDto>>("/api/survey-requests", ApiFactory.Json))!;
+        Assert.Equal([later.Order.Id], mine.Select(r => r.OrderId));
+
+        // Only surveyors see the queue, and another company sees none of it.
+        var rep = await factory.AddMemberAsync(company, "Sales Representative");
+        Assert.Equal(HttpStatusCode.Forbidden, (await rep.Client.GetAsync("/api/survey-requests")).StatusCode);
+        var stranger = (await factory.CreateCompanyAsync()).Admin.Client;
+        Assert.Empty((await stranger.GetFromJsonAsync<List<SurveyRequestDto>>("/api/survey-requests", ApiFactory.Json))!);
     }
 
     [Fact]
@@ -100,7 +205,7 @@ public class SiteSurveyTests(ApiFactory factory)
         var w = await CreateOrderWorldAsync(admin);
         var rep = await factory.AddMemberAsync(company, "Sales Representative");
         var planner = await factory.AddMemberAsync(company, "Planner");
-        var survey = await CreateAsync(admin, w.SiteId, Body());
+        var survey = await CreateAsync(admin, (await RequestingOrderAsync(admin, w)).Order.Id, Body());
 
         // Not an image, even though it says it is. Too big. Not allowed for a rep.
         var text = await UploadAsync(admin, survey.Id, System.Text.Encoding.UTF8.GetBytes("not a picture"));
@@ -140,33 +245,5 @@ public class SiteSurveyTests(ApiFactory factory)
         // Another company sees none of it.
         Assert.Equal(HttpStatusCode.NotFound, (await UploadAsync(other.Admin.Client, survey.Id, Png(32))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.Admin.Client.GetAsync($"/api/sites/{w.SiteId}/surveys")).StatusCode);
-    }
-
-    [Fact]
-    public async Task A_customers_last_three_surveys_come_from_all_their_sites()
-    {
-        var company = await factory.CreateCompanyAsync();
-        var other = await factory.CreateCompanyAsync();
-        var admin = company.Admin.Client;
-        var w = await CreateOrderWorldAsync(admin);
-        var siteB = await CreateSiteAsync(admin, w.CustomerId, "Tower B");
-
-        var otherCustomer = await CreateCustomerAsync(admin, "C2");
-        var otherSite = await CreateSiteAsync(admin, otherCustomer, "Elsewhere");
-
-        await CreateAsync(admin, w.SiteId, Body("NotOk", "2026-05-01"));
-        await CreateAsync(admin, siteB, Body("Ok", "2026-05-10"));
-        await CreateAsync(admin, w.SiteId, Body("Ok", "2026-05-20"));
-        await CreateAsync(admin, siteB, Body("NotOk", "2026-05-25"));
-        await CreateAsync(admin, otherSite, Body("Ok", "2026-05-30"));
-
-        var recent = await admin.GetFromJsonAsync<List<SiteSurveyDto>>($"/api/customers/{w.CustomerId}/surveys", ApiFactory.Json);
-
-        Assert.Equal(3, recent!.Count);
-        Assert.Equal([new DateOnly(2026, 5, 25), new DateOnly(2026, 5, 20), new DateOnly(2026, 5, 10)], recent.Select(s => s.SurveyedOn));
-        Assert.Equal(["Tower B", "Tower A", "Tower B"], recent.Select(s => s.SiteName));
-
-        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"/api/customers/{Guid.NewGuid()}/surveys")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await other.Admin.Client.GetAsync($"/api/customers/{w.CustomerId}/surveys")).StatusCode);
     }
 }

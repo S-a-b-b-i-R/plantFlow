@@ -348,6 +348,7 @@ public class ShiftPlansController(
                 OrderPlantId = l.Order.PlantId,
                 l.Order.SiteId,
                 SurveyId = l.Order.SiteSurveyId,
+                l.Order.SurveyRequested,
                 l.Order.DistanceKm
             })
             .FirstOrDefaultAsync(cancellationToken);
@@ -412,20 +413,24 @@ public class ShiftPlansController(
 
         var needsSurvey = settings.RequireSurveyBeforePlanning == SurveyRequirement.All
                           || (settings.RequireSurveyBeforePlanning == SurveyRequirement.PumpJobs && byPump);
+        // Only the survey tagged on the order counts. There is no fallback to the site's latest survey.
         if (needsSurvey)
         {
-            var surveys = db.SiteSurveys.AsNoTracking();
-            surveys = line.SurveyId is { } tagged
-                ? surveys.Where(s => s.Id == tagged)
-                : surveys.Where(s => s.SiteId == line.SiteId);
-
-            var latest = await surveys.OrderByDescending(s => s.SurveyedOn).ThenByDescending(s => s.CreatedAtUtc)
-                .Select(s => (SurveyResult?)s.Result).FirstOrDefaultAsync(cancellationToken);
-            if (latest != SurveyResult.Ok)
+            if (line.SurveyRequested)
             {
-                return Clash(line.SurveyId is null
-                    ? "The site's latest survey needs an OK result before this pour can be planned."
-                    : "The survey tagged on this order needs an OK result before this pour can be planned.");
+                return Clash("A new survey was requested for this order and is not recorded yet.");
+            }
+
+            if (line.SurveyId is not { } tagged)
+            {
+                return Clash("This order has no survey. Tag one of the site's surveys or request a new one on the order.");
+            }
+
+            var result = await db.SiteSurveys.AsNoTracking().Where(s => s.Id == tagged)
+                .Select(s => (SurveyResult?)s.Result).FirstOrDefaultAsync(cancellationToken);
+            if (result != SurveyResult.Ok)
+            {
+                return Clash("The survey tagged on this order needs an OK result before this pour can be planned.");
             }
         }
 

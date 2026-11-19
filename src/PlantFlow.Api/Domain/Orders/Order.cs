@@ -84,8 +84,13 @@ public class Order : AuditableEntity, ITenantOwned
     // Copied at confirmation
     public bool VatExempt { get; set; }
     public bool VatOnConcrete { get; set; } = true;
-    // The survey the rep tagged: one of the customer's last three. Planning checks it instead of the site's latest.
+    // The survey planning checks: one of the site's last three, or the one recorded for this order's request.
     public Guid? SiteSurveyId { get; set; }
+
+    // A new survey was asked for and is not recorded yet. It shows in the surveyor work queue.
+    public bool SurveyRequested { get; set; }
+    public DateTime? SurveyRequestedAtUtc { get; set; }
+    public Guid? SurveyRequestedBy { get; set; }
 }
 
 public class OrderLine : ITenantOwned

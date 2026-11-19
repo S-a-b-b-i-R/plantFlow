@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PlantFlow.Api.Data;
+using PlantFlow.Api.Domain.Orders;
 using PlantFlow.Api.Domain.Planning;
 using PlantFlow.Api.Domain.Security;
 using PlantFlow.Api.Infrastructure;
@@ -15,7 +16,13 @@ public record SiteSurveyDto(
     Guid Id, Guid SiteId, string SiteName, DateOnly SurveyedOn, SurveyResult Result, string? Notes,
     Guid? SurveyedBy, DateTime CreatedAtUtc, decimal? Latitude, decimal? Longitude, decimal? AccuracyMeters,
     decimal? PipingMetres, string? PumpPosition, string? TruckConnectionPoint, string? LocationNote,
-    List<SurveyImageDto> Images);
+    List<SurveyImageDto> Images, Guid? OrderId, string? OrderNumber);
+
+// An order waiting for a new survey, as the surveyor sees it in the work queue.
+public record SurveyRequestDto(
+    Guid OrderId, string OrderNumber, OrderStatus OrderStatus, string CustomerName, Guid SiteId, string SiteName,
+    string? SiteAddress, decimal? SiteLatitude, decimal? SiteLongitude, string? SiteAccessNotes,
+    Guid PlantId, string PlantCode, DateOnly RequestedDate, DateTime? SurveyRequestedAtUtc, bool HasPumpLines);
 
 public class SiteSurveyRequest
 {
@@ -55,12 +62,13 @@ public class SiteSurveyRequest
 }
 
 [ApiController]
-public class SiteSurveysController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
+public class SiteSurveysController(
+    PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit, PlantScope plantScope) : ControllerBase
 {
     private const int MaxImages = 3;
     private const int MaxImageBytes = 5 * 1024 * 1024;
 
-    // Newest first. Planning looks at the latest one unless an order tags another.
+    // Newest first. An order can tag one of the first three; planning uses only the tagged survey.
     [HttpGet("api/sites/{siteId:guid}/surveys")]
     [HasPermission(Permissions.SiteSurveysView)]
     public async Task<ActionResult<List<SiteSurveyDto>>> ForSite(Guid siteId, CancellationToken cancellationToken)
@@ -70,23 +78,54 @@ public class SiteSurveysController(PlantFlowDbContext db, ICurrentUser currentUs
         return await LoadAsync(db.SiteSurveys.AsNoTracking().Where(s => s.SiteId == siteId), null, cancellationToken);
     }
 
-    // The customer's last three surveys across all their sites. A new order can tag one of them.
-    [HttpGet("api/customers/{customerId:guid}/surveys")]
-    [HasPermission(Permissions.SiteSurveysView)]
-    public async Task<ActionResult<List<SiteSurveyDto>>> ForCustomer(Guid customerId, CancellationToken cancellationToken)
+    // The surveyor work queue: open orders waiting for a new survey, for the plants the surveyor works for
+    // (all plants when they have none assigned). The soonest pour date comes first, then the oldest request.
+    [HttpGet("api/survey-requests")]
+    [HasPermission(Permissions.SiteSurveysPerform)]
+    public async Task<ActionResult<List<SurveyRequestDto>>> Requests(CancellationToken cancellationToken)
     {
-        if (!await db.Customers.AnyAsync(c => c.Id == customerId, cancellationToken)) return NotFound();
+        var plants = await plantScope.PlantsOfAsync(currentUser.UserId, cancellationToken);
 
-        return await LoadAsync(
-            db.SiteSurveys.AsNoTracking().Where(s => s.Site.CustomerId == customerId), 3, cancellationToken);
+        return await RequestQuery(plants).ToListAsync(cancellationToken);
     }
 
-    [HttpPost("api/sites/{siteId:guid}/surveys")]
+    [HttpGet("api/survey-requests/{orderId:guid}")]
     [HasPermission(Permissions.SiteSurveysPerform)]
-    public async Task<ActionResult<SiteSurveyDto>> Create(Guid siteId, SiteSurveyRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<SurveyRequestDto>> RequestFor(Guid orderId, CancellationToken cancellationToken)
     {
-        var site = await db.Sites.FirstOrDefaultAsync(s => s.Id == siteId, cancellationToken);
-        if (site is null) return NotFound();
+        var plants = await plantScope.PlantsOfAsync(currentUser.UserId, cancellationToken);
+        var request = await RequestQuery(plants, orderId).FirstOrDefaultAsync(cancellationToken);
+        return request is null ? NotFound() : request;
+    }
+
+    // Records the survey an order asked for. It is linked to the order and becomes the order's tagged survey.
+    [HttpPost("api/orders/{orderId:guid}/surveys")]
+    [HasPermission(Permissions.SiteSurveysPerform)]
+    public async Task<ActionResult<SiteSurveyDto>> Create(Guid orderId, SiteSurveyRequest request, CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        if (order is null) return NotFound();
+
+        if (!order.SurveyRequested)
+        {
+            return Problem(title: "This order has not asked for a new survey. Request one on the order first.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (!OrderSurveys.OpenStatuses.Contains(order.Status))
+        {
+            return Problem(title: $"This order is {order.Status}, so it no longer needs a survey.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (!await plantScope.CoversAsync(currentUser.UserId, order.PlantId, cancellationToken))
+        {
+            return Problem(title: "This order is for a plant you do not work for.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        var siteId = order.SiteId;
+        var site = await db.Sites.FirstAsync(s => s.Id == siteId, cancellationToken);
 
         var latitude = request.Latitude!.Value;
         var longitude = request.Longitude!.Value;
@@ -102,6 +141,7 @@ public class SiteSurveysController(PlantFlowDbContext db, ICurrentUser currentUs
         {
             TenantId = site.TenantId,
             SiteId = siteId,
+            OrderId = order.Id,
             SurveyedOn = request.SurveyedOn!.Value,
             Result = request.Result!.Value,
             Notes = request.Notes?.Trim(),
@@ -122,9 +162,12 @@ public class SiteSurveysController(PlantFlowDbContext db, ICurrentUser currentUs
             site.Longitude = longitude;
         }
 
+        // The request is answered: the order now relies on this survey.
         db.SiteSurveys.Add(survey);
+        OrderSurveys.Apply(order, survey.Id, requestNew: false, currentUser.UserId);
+
         audit.Record(survey.TenantId, "sitesurvey.created", "SiteSurvey", survey.Id.ToString(),
-            new { survey.SiteId, survey.SurveyedOn, Result = survey.Result.ToString(), survey.Latitude, survey.Longitude });
+            new { survey.SiteId, survey.OrderId, survey.SurveyedOn, Result = survey.Result.ToString(), survey.Latitude, survey.Longitude });
         await db.SaveChangesAsync(cancellationToken);
 
         var dto = (await LoadAsync(db.SiteSurveys.AsNoTracking().Where(s => s.Id == survey.Id), null, cancellationToken)).Single();
@@ -219,6 +262,21 @@ public class SiteSurveysController(PlantFlowDbContext db, ICurrentUser currentUs
         return null;
     }
 
+    private IQueryable<SurveyRequestDto> RequestQuery(List<Guid>? plants, Guid? orderId = null) =>
+        db.Orders.AsNoTracking()
+            .Where(o => orderId == null || o.Id == orderId)
+            // The same states as OrderSurveys.OpenStatuses, spelled out because EF cannot translate that array here.
+            .Where(o => o.SurveyRequested && (o.Status == OrderStatus.Draft || o.Status == OrderStatus.Submitted
+                || o.Status == OrderStatus.InApproval || o.Status == OrderStatus.Approved
+                || o.Status == OrderStatus.Confirmed || o.Status == OrderStatus.OnHold))
+            .Where(o => plants == null || plants.Contains(o.PlantId))
+            .OrderBy(o => o.RequestedDate).ThenBy(o => o.SurveyRequestedAtUtc)
+            .Select(o => new SurveyRequestDto(
+                o.Id, o.Number, o.Status, o.Customer.Name, o.SiteId, o.Site.Name,
+                o.Site.Address, o.Site.Latitude, o.Site.Longitude, o.Site.AccessNotes,
+                o.PlantId, o.Plant.Code, o.RequestedDate, o.SurveyRequestedAtUtc,
+                o.Lines.Any(l => l.PourMethod == PourMethod.Pump)));
+
     // Newest first. The photos come back as details only. Each one is fetched on its own.
     private async Task<List<SiteSurveyDto>> LoadAsync(IQueryable<SiteSurvey> query, int? take, CancellationToken cancellationToken)
     {
@@ -241,7 +299,9 @@ public class SiteSurveysController(PlantFlowDbContext db, ICurrentUser currentUs
             s.PipingMetres,
             s.PumpPosition,
             s.TruckConnectionPoint,
-            s.LocationNote
+            s.LocationNote,
+            s.OrderId,
+            OrderNumber = s.Order != null ? s.Order.Number : null
         }).ToListAsync(cancellationToken);
 
         var ids = rows.Select(r => r.Id).ToList();
@@ -254,6 +314,7 @@ public class SiteSurveysController(PlantFlowDbContext db, ICurrentUser currentUs
             r.Id, r.SiteId, r.SiteName, r.SurveyedOn, r.Result, r.Notes, r.SurveyedBy, r.CreatedAtUtc,
             r.Latitude, r.Longitude, r.AccuracyMeters, r.PipingMetres, r.PumpPosition, r.TruckConnectionPoint, r.LocationNote,
             images.Where(i => i.SurveyId == r.Id)
-                .Select(i => new SurveyImageDto(i.Id, i.FileName, i.ContentType, i.SizeBytes, i.Caption)).ToList())).ToList();
+                .Select(i => new SurveyImageDto(i.Id, i.FileName, i.ContentType, i.SizeBytes, i.Caption)).ToList(),
+            r.OrderId, r.OrderNumber)).ToList();
     }
 }
