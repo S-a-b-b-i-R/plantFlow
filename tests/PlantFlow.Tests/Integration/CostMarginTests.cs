@@ -19,10 +19,8 @@ public class CostMarginTests(ApiFactory factory)
         var cement = await CreateMaterialAsync(admin, "CEM", "Cement", "Kg");
         var plantId = await CreatePlantAsync(admin, "P1");
 
-        (await admin.PostAsJsonAsync("/api/material-costs",
-            new { materialId = cement, costPerUnit = 8m, effectiveFrom = "2026-01-01" })).EnsureSuccessStatusCode();
-        (await admin.PostAsJsonAsync("/api/overhead-costs",
-            new { kind = "Overhead", name = "Labour", amountPerCft = 10m, validFrom = "2026-01-01" })).EnsureSuccessStatusCode();
+        await CreateApprovedMaterialCostAsync(admin, cement, 8m);
+        await CreateApprovedOverheadAsync(admin, "Overhead", 10m);
 
         var items = new[] { new { materialId = cement, quantityPerCft = 10m } };
         var alpha = await CreateProductAsync(admin, "ALPHA");
@@ -127,8 +125,7 @@ public class CostMarginTests(ApiFactory factory)
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
         var setup = await SetupAsync(admin);
 
-        (await admin.PostAsJsonAsync("/api/delivery-charges",
-            new { fromKm = 15m, toKm = 30m, chargePerCft = 9m })).EnsureSuccessStatusCode();
+        await CreateApprovedBandAsync(admin, 15m, 30m, 9m);
 
         var near = (await ReportAsync(admin, setup.PlantId, km: 10m)).First(r => r.ProductCode == "ALPHA");
         var far = (await ReportAsync(admin, setup.PlantId, km: 20m)).First(r => r.ProductCode == "ALPHA");

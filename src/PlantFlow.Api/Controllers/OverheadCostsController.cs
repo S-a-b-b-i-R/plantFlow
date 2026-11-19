@@ -12,7 +12,8 @@ namespace PlantFlow.Api.Controllers;
 
 public record OverheadCostDto(
     Guid Id, OverheadKind Kind, string Name, Guid? PlantId, string? PlantCode,
-    decimal AmountPerCft, DateOnly ValidFrom, DateOnly? ValidTo);
+    decimal AmountPerCft, DateOnly ValidFrom, DateOnly? ValidTo,
+    CostStatus Status, string? RejectionReason, DateTime? ApprovedAtUtc);
 
 public class OverheadCostRequest
 {
@@ -41,18 +42,21 @@ public class OverheadCostRequest
 public class OverheadCostsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
     private static readonly Expression<Func<OverheadCost, OverheadCostDto>> ToDto = c => new OverheadCostDto(
-        c.Id, c.Kind, c.Name, c.PlantId, c.Plant != null ? c.Plant.Code : null, c.AmountPerCft, c.ValidFrom, c.ValidTo);
+        c.Id, c.Kind, c.Name, c.PlantId, c.Plant != null ? c.Plant.Code : null, c.AmountPerCft, c.ValidFrom, c.ValidTo,
+        c.Status, c.RejectionReason, c.ApprovedAtUtc);
 
-    // ?search= matches the name.  ?kind=  ?plantId=
+    // ?search= matches the name.  ?kind=  ?plantId=  ?status=
     [HttpGet]
-    [HasPermission(Permissions.CostsManage)]
+    [HasPermission(Permissions.CostsManage, Permissions.CostsApprove)]
     public async Task<ActionResult<PagedResult<OverheadCostDto>>> List(
-        [FromQuery] PageQuery paging, [FromQuery] OverheadKind? kind, [FromQuery] Guid? plantId, CancellationToken cancellationToken)
+        [FromQuery] PageQuery paging, [FromQuery] OverheadKind? kind, [FromQuery] Guid? plantId, [FromQuery] CostStatus? status,
+        CancellationToken cancellationToken)
     {
         var query = db.OverheadCosts.AsNoTracking();
 
         if (kind is not null) query = query.Where(c => c.Kind == kind);
         if (plantId is not null) query = query.Where(c => c.PlantId == plantId);
+        if (status is not null) query = query.Where(c => c.Status == status);
 
         if (!string.IsNullOrWhiteSpace(paging.Search))
         {
@@ -65,7 +69,7 @@ public class OverheadCostsController(PlantFlowDbContext db, ICurrentUser current
     }
 
     [HttpGet("{id:guid}")]
-    [HasPermission(Permissions.CostsManage)]
+    [HasPermission(Permissions.CostsManage, Permissions.CostsApprove)]
     public async Task<ActionResult<OverheadCostDto>> Get(Guid id, CancellationToken cancellationToken)
     {
         var dto = await db.OverheadCosts.AsNoTracking().Where(c => c.Id == id).Select(ToDto)
@@ -107,6 +111,11 @@ public class OverheadCostsController(PlantFlowDbContext db, ICurrentUser current
         var cost = await db.OverheadCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
         if (cost is null) return NotFound();
 
+        if (CostWorkflow.RequireDraft(cost, "overhead", "edited") is { } notDraft)
+        {
+            return Problem(title: notDraft, statusCode: StatusCodes.Status409Conflict);
+        }
+
         var problem = await CheckAsync(request, cost.PlantId, cancellationToken);
         if (problem is not null) return problem;
 
@@ -125,12 +134,18 @@ public class OverheadCostsController(PlantFlowDbContext db, ICurrentUser current
         return NoContent();
     }
 
+    // Only a draft can be removed. An approved overhead is retired instead, so the history stays.
     [HttpDelete("{id:guid}")]
     [HasPermission(Permissions.CostsManage)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var cost = await db.OverheadCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
         if (cost is null) return NotFound();
+
+        if (CostWorkflow.RequireDraft(cost, "overhead", "deleted") is { } notDraft)
+        {
+            return Problem(title: notDraft, statusCode: StatusCodes.Status409Conflict);
+        }
 
         db.OverheadCosts.Remove(cost);
         audit.Record(cost.TenantId, "overheadcost.deleted", "OverheadCost", cost.Id.ToString(),
@@ -164,5 +179,77 @@ public class OverheadCostsController(PlantFlowDbContext db, ICurrentUser current
         }
 
         return null;
+    }
+
+    // Management approval. From then on the floor price uses it, between its start and end dates.
+    [HttpPost("{id:guid}/approve")]
+    [HasPermission(Permissions.CostsApprove)]
+    public async Task<IActionResult> Approve(Guid id, CancellationToken cancellationToken)
+    {
+        var cost = await db.OverheadCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (cost is null) return NotFound();
+
+        if (CostWorkflow.RequirePending(cost, "overhead") is { } why)
+        {
+            return Problem(title: why, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        CostWorkflow.MarkApproved(cost, currentUser.UserId);
+        audit.Record(cost.TenantId, "overheadcost.approved", "OverheadCost", cost.Id.ToString(),
+            new { cost.Kind, cost.Name, cost.PlantId, cost.AmountPerCft, cost.ValidFrom, cost.ValidTo });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/submit")]
+    [HasPermission(Permissions.CostsManage)]
+    public async Task<IActionResult> Submit(Guid id, CancellationToken cancellationToken)
+    {
+        var cost = await db.OverheadCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (cost is null) return NotFound();
+
+        if (CostWorkflow.Submit(cost, "overhead") is { } why)
+        {
+            return Problem(title: why, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        audit.Record(cost.TenantId, "overheadcost.submitted", "OverheadCost", cost.Id.ToString(), new { cost.Status });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/reject")]
+    [HasPermission(Permissions.CostsApprove)]
+    public async Task<IActionResult> Reject(Guid id, RejectCostRequest request, CancellationToken cancellationToken)
+    {
+        var cost = await db.OverheadCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (cost is null) return NotFound();
+
+        if (CostWorkflow.Reject(cost, request.Reason, "overhead") is { } why)
+        {
+            return Problem(title: why, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        audit.Record(cost.TenantId, "overheadcost.rejected", "OverheadCost", cost.Id.ToString(), new { cost.RejectionReason });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    // Ends an approved row right away. The floor price ignores it from then on.
+    [HttpPost("{id:guid}/retire")]
+    [HasPermission(Permissions.CostsApprove)]
+    public async Task<IActionResult> Retire(Guid id, CancellationToken cancellationToken)
+    {
+        var cost = await db.OverheadCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (cost is null) return NotFound();
+
+        if (CostWorkflow.Retire(cost, "overhead") is { } why)
+        {
+            return Problem(title: why, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        audit.Record(cost.TenantId, "overheadcost.retired", "OverheadCost", cost.Id.ToString(), new { cost.Status });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
     }
 }

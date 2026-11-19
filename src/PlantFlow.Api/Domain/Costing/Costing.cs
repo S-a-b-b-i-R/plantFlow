@@ -5,9 +5,24 @@ namespace PlantFlow.Api.Domain.Costing;
 
 public enum OverheadKind { Overhead, Fuel, BridgeToll }
 
+public enum CostStatus { Draft, PendingApproval, Approved, Retired }
+
+// Material costs, overheads and delivery bands only count in a floor price once management has approved them.
+// An approved row is never edited. A change is a new row; the old one is retired.
+public abstract class ApprovableCost : AuditableEntity
+{
+    public CostStatus Status { get; set; } = CostStatus.Draft;
+
+    // Why the approver sent it back. Cleared when it is submitted again.
+    public string? RejectionReason { get; set; }
+
+    public Guid? ApprovedBy { get; set; }
+    public DateTime? ApprovedAtUtc { get; set; }
+}
+
 // What one unit of a material costs, in the material's own unit (kg, litre or tonne).
 // A history: the latest row on or before a date applies. A plant row beats the general row.
-public class MaterialCost : AuditableEntity, ITenantOwned
+public class MaterialCost : ApprovableCost, ITenantOwned
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
     public Guid TenantId { get; set; }
@@ -23,7 +38,7 @@ public class MaterialCost : AuditableEntity, ITenantOwned
 }
 
 // A cost per CFT that is not a material: overhead, fuel or bridge toll.
-public class OverheadCost : AuditableEntity, ITenantOwned
+public class OverheadCost : ApprovableCost, ITenantOwned
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
     public Guid TenantId { get; set; }
@@ -41,7 +56,7 @@ public class OverheadCost : AuditableEntity, ITenantOwned
 }
 
 // Delivery charge per CFT when the site is more than FromKm and up to ToKm from the plant.
-public class DeliveryChargeBand : AuditableEntity, ITenantOwned
+public class DeliveryChargeBand : ApprovableCost, ITenantOwned
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
     public Guid TenantId { get; set; }

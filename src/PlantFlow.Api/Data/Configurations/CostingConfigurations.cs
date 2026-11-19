@@ -12,6 +12,8 @@ public class MaterialCostConfiguration : IEntityTypeConfiguration<MaterialCost>
     {
         builder.HasKey(c => c.Id);
         builder.Property(c => c.CostPerUnit).HasPrecision(14, 4);
+        builder.Property(c => c.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(c => c.RejectionReason).HasMaxLength(500);
         builder.HasIndex(c => new { c.TenantId, c.MaterialId, c.PlantId, c.EffectiveFrom }).IsUnique();
 
         builder.HasOne(c => c.Material).WithMany().HasForeignKey(c => c.MaterialId).OnDelete(DeleteBehavior.Restrict);
@@ -28,6 +30,8 @@ public class OverheadCostConfiguration : IEntityTypeConfiguration<OverheadCost>
         builder.Property(c => c.Kind).HasConversion<string>().HasMaxLength(20);
         builder.Property(c => c.Name).HasMaxLength(100).IsRequired();
         builder.Property(c => c.AmountPerCft).HasPrecision(12, 4);
+        builder.Property(c => c.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(c => c.RejectionReason).HasMaxLength(500);
 
         builder.HasOne(c => c.Plant).WithMany().HasForeignKey(c => c.PlantId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Tenant>().WithMany().HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Restrict);
@@ -42,6 +46,8 @@ public class DeliveryChargeBandConfiguration : IEntityTypeConfiguration<Delivery
         builder.Property(b => b.FromKm).HasPrecision(8, 2);
         builder.Property(b => b.ToKm).HasPrecision(8, 2);
         builder.Property(b => b.ChargePerCft).HasPrecision(12, 4);
+        builder.Property(b => b.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(b => b.RejectionReason).HasMaxLength(500);
 
         builder.HasOne(b => b.Plant).WithMany().HasForeignKey(b => b.PlantId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Tenant>().WithMany().HasForeignKey(b => b.TenantId).OnDelete(DeleteBehavior.Restrict);

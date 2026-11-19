@@ -55,6 +55,6 @@ public static class DefaultRoles
             BatchesManage, ReturnsManage, TargetsView, DashboardsView
         ],
 
-        ["Management"] = [OrdersView, OrdersApproveManagement, DeliveriesTrack, TargetsView, DashboardsView]
+        ["Management"] = [OrdersView, OrdersApproveManagement, CostsApprove, DeliveriesTrack, TargetsView, DashboardsView]
     };
 }
