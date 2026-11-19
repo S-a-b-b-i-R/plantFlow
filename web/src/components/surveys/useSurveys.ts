@@ -1,33 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiBlob } from "@/lib/api";
-import type { CustomerOption, Paged, SiteOption } from "@/lib/orders";
-import type { Site, SiteSurvey } from "@/lib/surveys";
+import type { Site, SiteSurvey, SurveyRequest } from "@/lib/surveys";
 
-export const useCustomerSearch = (search: string, enabled: boolean) =>
+// The surveyor work queue: open orders waiting for a new survey, soonest pour first.
+export const useSurveyRequests = (enabled = true) =>
     useQuery({
-        queryKey: ["customers", "pick", search],
-        queryFn: () =>
-            api<Paged<CustomerOption>>(
-                `/api/customers?status=Active&pageSize=8&search=${encodeURIComponent(search)}`,
-            ),
+        queryKey: ["surveys", "requests"],
+        queryFn: () => api<SurveyRequest[]>("/api/survey-requests"),
         enabled,
+        refetchInterval: 60_000,
     });
 
-export const useCustomer = (id: string | null) =>
+export const useSurveyRequest = (orderId: string) =>
     useQuery({
-        queryKey: ["customers", id],
-        queryFn: () => api<CustomerOption>(`/api/customers/${id}`),
-        enabled: !!id,
-    });
-
-export const useSites = (customerId: string | null) =>
-    useQuery({
-        queryKey: ["sites", customerId],
-        queryFn: () =>
-            api<Paged<SiteOption>>(
-                `/api/customers/${customerId}/sites?status=Active&pageSize=100`,
-            ),
-        enabled: !!customerId,
+        queryKey: ["surveys", "requests", orderId],
+        queryFn: () => api<SurveyRequest>(`/api/survey-requests/${orderId}`),
+        retry: false,
     });
 
 export const useSite = (id: string) =>
@@ -40,6 +28,7 @@ export const useSiteSurveys = (siteId: string) =>
     useQuery({
         queryKey: ["surveys", "site", siteId],
         queryFn: () => api<SiteSurvey[]>(`/api/sites/${siteId}/surveys`),
+        enabled: !!siteId,
     });
 
 // A survey photo needs the sign-in token, so it is fetched and shown from an object URL.

@@ -15,6 +15,11 @@ public class SiteSurvey : ITenantOwned
     public Guid SiteId { get; set; }
     public Site Site { get; set; } = null!;
 
+    // The order whose request this survey answered; its plant decides who may approve it.
+    // Empty only on surveys recorded before surveys came from orders.
+    public Guid? OrderId { get; set; }
+    public Order? Order { get; set; }
+
     public DateOnly SurveyedOn { get; set; }
     public SurveyResult Result { get; set; }
     public string? Notes { get; set; }

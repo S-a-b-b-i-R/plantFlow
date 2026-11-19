@@ -23,6 +23,7 @@ export type Draft = {
     paymentTerms: string;
     notes: string;
     surveyId: string;
+    requestSurvey: boolean;
     lines: LineDraft[];
 };
 
@@ -48,6 +49,7 @@ export const emptyDraft = (): Draft => ({
     paymentTerms: "",
     notes: "",
     surveyId: "",
+    requestSurvey: false,
     lines: [blankLine("n0")],
 });
 
@@ -62,6 +64,7 @@ export const draftFrom = ({ order, lines }: OrderDetail): Draft => ({
     paymentTerms: order.paymentTerms ?? "",
     notes: order.notes ?? "",
     surveyId: order.surveyId ?? "",
+    requestSurvey: order.surveyRequested,
     lines: lines.map((l) => ({
         key: l.id,
         id: l.id,
@@ -104,6 +107,7 @@ export const toRequest = (draft: Draft) => ({
     paymentTerms: draft.paymentTerms.trim() || undefined,
     notes: draft.notes.trim() || undefined,
     surveyId: draft.surveyId || undefined,
+    requestSurvey: draft.requestSurvey,
     lines: draft.lines.map((l) => ({
         id: l.id,
         productId: l.productId,

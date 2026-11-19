@@ -66,6 +66,8 @@ public class OrderChargeTests(ApiFactory factory)
                 siteId = w.SiteId,
                 plantId = w.PlantId,
                 requestedDate = "2026-06-01",
+                surveyId = order.Order.SurveyId,
+                requestSurvey = order.Order.SurveyRequested,
                 distanceKm = 5m,
                 lines = new[]
                 {

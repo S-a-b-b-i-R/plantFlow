@@ -57,6 +57,7 @@ export interface OrderSummary {
     confirmationReference: string | null;
     holdReason: string | null;
     surveyId: string | null;
+    surveyRequested: boolean;
 }
 
 export interface OrderLine {

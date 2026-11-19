@@ -16,7 +16,7 @@ public record OrderSummaryDto(
     Guid? SalesRepId, string? SalesRepName, Guid PlantId, string PlantCode, DateOnly RequestedDate,
     decimal DistanceKm, OrderStatus Status, string? PaymentTerms, string? Notes, string? CancelReason,
     int LineCount, decimal TotalQuantityCft, decimal TotalValue, int BelowFloorLineCount, DateTime? ConfirmedAtUtc, Guid? ConfirmedBy, ConfirmationMethod? ConfirmationMethod,
-    string? ConfirmationReference, string? HoldReason, Guid? SurveyId);
+    string? ConfirmationReference, string? HoldReason, Guid? SurveyId, bool SurveyRequested);
 
 public record OrderLineDto(
     Guid Id, Guid ProductId, string ProductCode, string ProductName, Guid? MixDesignId,
@@ -96,8 +96,19 @@ public class OrderRequest
     [Required, MinLength(1)]
     public List<OrderLineRequest> Lines { get; init; } = [];
 
-    // Tag one of the customer's last three surveys. Planning then uses it. Leave it out for none.
+    // Tag one of the site's last three surveys, or set RequestSurvey to ask for a new one. Planning uses
+    // only the tagged survey. Whether one is needed follows the company's survey rule (checked at submit).
     public Guid? SurveyId { get; init; }
+
+    public bool RequestSurvey { get; init; }
+}
+
+public class OrderSurveyRequest
+{
+    // One of the site's last three surveys. Leave it out when requesting a new one, or for none.
+    public Guid? SurveyId { get; init; }
+
+    public bool RequestSurvey { get; init; }
 }
 
 public class ReviseOrderRequest
@@ -120,7 +131,8 @@ public class CancelOrderRequest
 [Route("api/orders")]
 public class OrdersController(
     PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit,
-    FloorPriceCalculator calculator, PriceFinder finder, OrderApprovalFlow flow, OrderChargeCalculator chargeCalculator) : ControllerBase
+    FloorPriceCalculator calculator, PriceFinder finder, OrderApprovalFlow flow, OrderChargeCalculator chargeCalculator,
+    OrderSurveys surveys) : ControllerBase
 {
     private static readonly Expression<Func<Order, OrderSummaryDto>> ToSummary = o => new OrderSummaryDto(
         o.Id, o.Number, o.CustomerId, o.Customer.Name, o.SiteId, o.Site.Name,
@@ -128,7 +140,7 @@ public class OrdersController(
         o.DistanceKm, o.Status, o.PaymentTerms, o.Notes, o.CancelReason,
         o.Lines.Count(), o.Lines.Sum(l => l.QuantityCft), o.Lines.Sum(l => l.QuantityCft * l.UnitPrice),
         o.Lines.Count(l => l.FloorPrice != null && l.UnitPrice < l.FloorPrice),
-        o.ConfirmedAtUtc, o.ConfirmedBy, o.ConfirmationMethod, o.ConfirmationReference, o.HoldReason, o.SiteSurveyId);
+        o.ConfirmedAtUtc, o.ConfirmedBy, o.ConfirmationMethod, o.ConfirmationReference, o.HoldReason, o.SiteSurveyId, o.SurveyRequested);
 
     private static readonly Expression<Func<OrderLine, OrderLineDto>> ToLine = l => new OrderLineDto(
         l.Id, l.ProductId, l.Product.Code, l.Product.Name, l.MixDesignId,
@@ -205,7 +217,6 @@ public class OrdersController(
             Number = $"SO-{sequence:D6}",
             CustomerId = request.CustomerId!.Value,
             SiteId = request.SiteId!.Value,
-            SiteSurveyId = request.SurveyId,
             SalesRepId = prepared!.SalesRepId,
             PlantId = request.PlantId!.Value,
             RequestedDate = request.RequestedDate!.Value,
@@ -214,6 +225,7 @@ public class OrdersController(
             Notes = request.Notes?.Trim(),
             Lines = request.Lines.Select((r, i) => NewLine(tenantId, r, prepared.Lines[i])).ToList()
         };
+        OrderSurveys.Apply(order, request.SurveyId, request.RequestSurvey, currentUser.UserId);
         order.History.Add(HistoryEntry(order, null, OrderStatus.Draft, null));
 
         db.Orders.Add(order);
@@ -282,6 +294,9 @@ public class OrdersController(
         var changes = Compare(order, request.Order, prepared!);
         var lines = Apply(order, request.Order, prepared!);
 
+        var missing = await surveys.RequirementProblemAsync(order, lines.Select(l => l.PourMethod), cancellationToken);
+        if (missing is not null) return Problem(title: missing, statusCode: StatusCodes.Status409Conflict);
+
         if (changes.Commercial) flow.WithdrawCommercialStages(order);
         await flow.AdvanceAsync(order, lines, cancellationToken);
 
@@ -312,6 +327,9 @@ public class OrdersController(
 
         var changes = Compare(order, request.Order, prepared!);
         var lines = Apply(order, request.Order, prepared!);
+
+        var missing = await surveys.RequirementProblemAsync(order, lines.Select(l => l.PourMethod), cancellationToken);
+        if (missing is not null) return Problem(title: missing, statusCode: StatusCodes.Status409Conflict);
 
         var chargeError = await chargeCalculator.ReplaceAsync(order, lines, cancellationToken);
         if (chargeError is not null)
@@ -375,10 +393,56 @@ public class OrdersController(
                 statusCode: StatusCodes.Status409Conflict);
         }
 
+        var missing = await surveys.RequirementProblemAsync(order, order.Lines.Select(l => l.PourMethod), cancellationToken);
+        if (missing is not null) return Problem(title: missing, statusCode: StatusCodes.Status409Conflict);
+
         flow.Start(order);
 
         audit.Record(order.TenantId, "order.submitted", "Order", order.Id.ToString(),
             new { order.Number, order.ApprovalRound, BelowFloorLines = order.Lines.Count(OrderApprovalFlow.IsBelowFloor) });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    // Tags another of the site's last three surveys or requests a new one, on any open order until a pour
+    // of it is planned. Approved and confirmed orders cannot be edited, so this is its own action.
+    [HttpPut("{id:guid}/survey")]
+    [HasPermission(Permissions.OrdersEdit)]
+    public async Task<IActionResult> SetSurvey(Guid id, OrderSurveyRequest request, CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null) return NotFound();
+
+        if (!OrderSurveys.OpenStatuses.Contains(order.Status))
+        {
+            return Problem(title: $"The survey of an order that is {order.Status} cannot be changed.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var problem = await surveys.ChoiceProblemAsync(
+            order, order.SiteId, request.SurveyId, request.RequestSurvey, cancellationToken);
+        if (problem is not null)
+        {
+            return Problem(title: problem, statusCode: problem == OrderSurveys.Locked
+                ? StatusCodes.Status409Conflict
+                : StatusCodes.Status400BadRequest);
+        }
+
+        // Past the draft, the order must keep meeting the survey rule: it cannot drop to no survey at all.
+        var before = new { order.SiteSurveyId, order.SurveyRequested };
+        OrderSurveys.Apply(order, request.SurveyId, request.RequestSurvey, currentUser.UserId);
+        if (order.Status != OrderStatus.Draft)
+        {
+            var missing = await surveys.RequirementProblemAsync(order, order.Lines.Select(l => l.PourMethod), cancellationToken);
+            if (missing is not null) return Problem(title: missing, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        audit.Record(order.TenantId, "order.survey_changed", "Order", order.Id.ToString(), new
+        {
+            order.Number,
+            Before = before,
+            After = new { order.SiteSurveyId, order.SurveyRequested }
+        });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
@@ -437,15 +501,13 @@ public class OrdersController(
             return (null, Bad("Choose an active site that belongs to this customer."));
         }
 
-        if (request.SurveyId is { } surveyId && surveyId != existing?.SiteSurveyId)
+        var surveyProblem = await surveys.ChoiceProblemAsync(
+            existing, request.SiteId!.Value, request.SurveyId, request.RequestSurvey, cancellationToken);
+        if (surveyProblem is not null)
         {
-            var lastThree = await db.SiteSurveys.AsNoTracking().Where(s => s.Site.CustomerId == request.CustomerId)
-                .OrderByDescending(s => s.SurveyedOn).ThenByDescending(s => s.CreatedAtUtc)
-                .Take(3).Select(s => s.Id).ToListAsync(cancellationToken);
-            if (!lastThree.Contains(surveyId))
-            {
-                return (null, Bad("Tag one of this customer's last three surveys."));
-            }
+            return (null, surveyProblem == OrderSurveys.Locked
+                ? Problem(title: surveyProblem, statusCode: StatusCodes.Status409Conflict)
+                : Bad(surveyProblem));
         }
 
         var plantStatus = await db.Plants.AsNoTracking().Where(p => p.Id == request.PlantId)
@@ -579,7 +641,7 @@ public class OrdersController(
     {
         order.CustomerId = request.CustomerId!.Value;
         order.SiteId = request.SiteId!.Value;
-        order.SiteSurveyId = request.SurveyId;
+        OrderSurveys.Apply(order, request.SurveyId, request.RequestSurvey, currentUser.UserId);
         order.SalesRepId = prepared.SalesRepId;
         order.PlantId = request.PlantId!.Value;
         order.RequestedDate = request.RequestedDate!.Value;

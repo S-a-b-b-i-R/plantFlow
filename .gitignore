@@ -475,6 +475,9 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 
+# CLAUDE Handover file
+/docs/HANDOVER.md
+
 # Windows shortcuts
 *.lnk
 
@@ -485,3 +488,11 @@ $RECYCLE.BIN/
 
 
 /iinstructions.txt
+
+# Claude Code files (local only)
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+
+# Playwright MCP screenshots and logs
+.playwright-mcp/

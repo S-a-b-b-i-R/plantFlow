@@ -26,6 +26,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
     {
         builder.HasKey(o => o.Id);
         builder.Property(o => o.Number).HasMaxLength(20).IsRequired();
+        builder.HasIndex(o => o.SurveyRequested).HasFilter("[SurveyRequested] = 1");
         builder.Property(o => o.DistanceKm).HasPrecision(8, 2);
         builder.Property(o => o.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(o => o.PaymentTerms).HasMaxLength(100);

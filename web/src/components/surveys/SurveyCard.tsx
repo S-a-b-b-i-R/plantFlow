@@ -116,12 +116,17 @@ export function SurveyCard({
                     </span>
                     {latest && (
                         <span className="text-xs text-muted-foreground">
-                            Latest. Planning uses this one.
+                            Latest
                         </span>
                     )}
                 </div>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-right text-sm text-muted-foreground">
                     {shortDate(survey.surveyedOn)}
+                    {survey.orderNumber && (
+                        <span className="block text-xs">
+                            For {survey.orderNumber}
+                        </span>
+                    )}
                 </span>
             </header>
 

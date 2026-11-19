@@ -13,7 +13,8 @@ public partial class PourPlanningTests(ApiFactory factory)
     // One plant with three shifts, two pumps and a confirmed order with a pumped line (500 CFT) and a chute line (100 CFT).
     // The site is surveyed OK unless asked otherwise. The order is 5 km from the plant.
     private sealed record Fixture(
-        OrderWorld W, Guid Morning, Guid Afternoon, Guid Night, Guid Pump, Guid Pump2, Guid PumpLine, Guid ChuteLine, Guid Mixer);
+        OrderWorld W, Guid Morning, Guid Afternoon, Guid Night, Guid Pump, Guid Pump2, Guid PumpLine, Guid ChuteLine, Guid Mixer,
+        Guid OrderId);
 
     private static async Task<Fixture> SetupAsync(HttpClient admin, bool withSurvey = true, Guid? pumpDriver = null)
     {
@@ -30,10 +31,12 @@ public partial class PourPlanningTests(ApiFactory factory)
             LineBody(w.ProductId, 500m, null, "Slab", "Pump"),
             LineBody(w.ProductId, 100m, null, "Column", "Chute")
         ]);
-        if (withSurvey) (await AddSurveyAsync(admin, w.SiteId, "Ok")).EnsureSuccessStatusCode();
+        // The pumped order asked for a survey. With withSurvey the surveyor has recorded an OK one.
+        if (withSurvey) await RecordSurveyAsync(admin, order.Order.Id, "Ok");
 
         return new Fixture(w, morning, afternoon, night, pump, pump2,
-            order.Lines.Single(l => l.QuantityCft == 500m).Id, order.Lines.Single(l => l.QuantityCft == 100m).Id, mixer);
+            order.Lines.Single(l => l.QuantityCft == 500m).Id, order.Lines.Single(l => l.QuantityCft == 100m).Id, mixer,
+            order.Order.Id);
     }
 
     private static async Task<Guid> CreateShiftAsync(HttpClient c, Guid plantId, string name, string start, string end)
@@ -66,10 +69,6 @@ public partial class PourPlanningTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<DriverDto>(ApiFactory.Json))!.Id;
     }
-
-    private static Task<HttpResponseMessage> AddSurveyAsync(HttpClient c, Guid siteId, string result, string date = "2026-05-30") =>
-    c.PostAsJsonAsync($"/api/sites/{siteId}/surveys",
-        new { surveyedOn = date, result, latitude = 23.8103m, longitude = 90.4125m, accuracyMeters = 8m });
 
     private static async Task<ShiftPlanDetailDto> PlanAsync(HttpClient c, Guid plantId, string date, Guid shiftId)
     {
@@ -156,15 +155,26 @@ public partial class PourPlanningTests(ApiFactory factory)
         var plan = await PlanAsync(admin, fx.W.PlantId, "2026-06-01", fx.Morning);
         var id = plan.Plan.Id;
 
-        // Pump jobs need a survey with an OK result. Other pours do not under the PumpJobs setting.
-        Assert.Equal(HttpStatusCode.Conflict, (await PourAsync(admin, id, fx.PumpLine, 10m, "09:00:00", fx.Pump)).StatusCode);
+        // Pump jobs need the order's survey with an OK result. Other pours do not under the PumpJobs setting.
+        var waiting = await PourAsync(admin, id, fx.PumpLine, 10m, "09:00:00", fx.Pump);
+        Assert.Equal(HttpStatusCode.Conflict, waiting.StatusCode);
+        Assert.Contains("A new survey was requested for this order and is not recorded yet.", await waiting.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.Created, (await PourAsync(admin, id, fx.ChuteLine, 20m, "09:00:00")).StatusCode);
 
-        (await AddSurveyAsync(admin, fx.W.SiteId, "NotOk", "2026-05-30")).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.Conflict, (await PourAsync(admin, id, fx.PumpLine, 10m, "09:00:00", fx.Pump)).StatusCode);
+        await RecordSurveyAsync(admin, fx.OrderId, "NotOk", "2026-05-30");
+        var notOk = await PourAsync(admin, id, fx.PumpLine, 10m, "09:00:00", fx.Pump);
+        Assert.Equal(HttpStatusCode.Conflict, notOk.StatusCode);
+        Assert.Contains("needs an OK result", await notOk.Content.ReadAsStringAsync());
 
-        (await AddSurveyAsync(admin, fx.W.SiteId, "Ok", "2026-05-31")).EnsureSuccessStatusCode();
+        // The planned chute pour did not rely on the survey, so a fresh one can still be requested.
+        (await RequestSurveyAsync(admin, fx.OrderId)).EnsureSuccessStatusCode();
+        await RecordSurveyAsync(admin, fx.OrderId, "Ok", "2026-05-31");
         Assert.Equal(HttpStatusCode.Created, (await PourAsync(admin, id, fx.PumpLine, 300m, "09:00:00", fx.Pump)).StatusCode);
+
+        // Now a pumped pour relies on it, so it is locked.
+        var locked = await RequestSurveyAsync(admin, fx.OrderId);
+        Assert.Equal(HttpStatusCode.Conflict, locked.StatusCode);
+        Assert.Contains("The survey cannot be changed after a pour that relies on it is planned.", await locked.Content.ReadAsStringAsync());
 
         // The planned total cannot pass the ordered 500 CFT.
         Assert.Equal(HttpStatusCode.Conflict, (await PourAsync(admin, id, fx.PumpLine, 250m, "10:00:00", fx.Pump2)).StatusCode);
@@ -342,92 +352,92 @@ public partial class PourPlanningTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task A_tagged_survey_decides_the_check_and_must_be_one_of_the_customers_last_three()
+    public async Task Only_the_tagged_survey_decides_the_check_and_it_must_be_one_of_the_sites_last_three()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
         var fx = await SetupAsync(admin, withSurvey: false);
         var siteB = await CreateSiteAsync(admin, fx.W.CustomerId, "Tower B");
+        var atSiteB = fx.W with { SiteId = siteB };
 
-        async Task<Guid> SurveyAsync(Guid siteId, string result, string date)
+        // A survey only comes from an order's request: a pumped draft asks for one, the surveyor records it.
+        async Task<Guid> SurveyAsync(OrderWorld world, string result, string date)
         {
-            var response = await AddSurveyAsync(admin, siteId, result, date);
-            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-            return (await response.Content.ReadFromJsonAsync<SiteSurveyDto>(ApiFactory.Json))!.Id;
+            var draft = await CreateDraftAsync(admin, world, [LineBody(world.ProductId, 10m, null, "Slab", "Pump")]);
+            return (await RecordSurveyAsync(admin, draft.Order.Id, result, date)).Id;
         }
 
-        // A pumped order for the customer's first site, with or without a tagged survey. It is confirmed and ready to plan.
-        async Task<OrderDetailDto> ConfirmedOrderAsync(Guid? surveyId)
-        {
-            var created = await admin.PostAsJsonAsync("/api/orders", new
-            {
-                customerId = fx.W.CustomerId,
-                siteId = fx.W.SiteId,
-                plantId = fx.W.PlantId,
-                requestedDate = "2026-06-01",
-                distanceKm = 5m,
-                surveyId,
-                lines = new[] { LineBody(fx.W.ProductId, 100m, null, "Slab", "Pump") }
-            });
-            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-            var order = (await created.Content.ReadFromJsonAsync<OrderDetailDto>(ApiFactory.Json))!;
-            var id = order.Order.Id;
-
-            (await admin.PostAsync($"/api/orders/{id}/submit", null)).EnsureSuccessStatusCode();
-            (await admin.PostAsJsonAsync($"/api/orders/{id}/approvals/sales-manager/approve", new { comment = (string?)null })).EnsureSuccessStatusCode();
-            (await admin.PostAsJsonAsync($"/api/orders/{id}/confirm", new { method = "Phone" })).EnsureSuccessStatusCode();
-            return (await admin.GetFromJsonAsync<OrderDetailDto>($"/api/orders/{id}", ApiFactory.Json))!;
-        }
-
-        // The first site's latest survey is not OK. The second site's survey is.
-        var failed = await SurveyAsync(fx.W.SiteId, "NotOk", "2026-05-30");
-        var passed = await SurveyAsync(siteB, "Ok", "2026-05-31");
-
+        var failed = await SurveyAsync(fx.W, "NotOk", "2026-05-30");
+        var passed = await SurveyAsync(fx.W, "Ok", "2026-05-31");
         var plan = await PlanAsync(admin, fx.W.PlantId, "2026-06-01", fx.Morning);
+        object[] pumped = [LineBody(fx.W.ProductId, 100m, null, "Slab", "Pump")];
 
-        // Tagged with the OK survey: planned, although the order's own site failed.
-        var tagged = await ConfirmedOrderAsync(passed);
+        // Tagged with the OK survey: planned.
+        var tagged = await CreateConfirmedAsync(admin, fx.W, pumped, surveyId: passed);
         Assert.Equal(passed, tagged.Order.SurveyId);
+        Assert.False(tagged.Order.SurveyRequested);
         Assert.Equal(HttpStatusCode.Created,
             (await PourAsync(admin, plan.Plan.Id, tagged.Lines.Single().Id, 10m, "09:00:00", fx.Pump)).StatusCode);
 
-        // Untagged: the site's latest survey counts, and it failed. Tagged with the failed survey: blocked too.
-        var untagged = await ConfirmedOrderAsync(null);
-        var withFailed = await ConfirmedOrderAsync(failed);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await PourAsync(admin, plan.Plan.Id, untagged.Lines.Single().Id, 10m, "10:00:00", fx.Pump2)).StatusCode);
+        // Tagged with the failed survey: blocked, even though a newer OK survey exists for the site.
+        var withFailed = await CreateConfirmedAsync(admin, fx.W, pumped, surveyId: failed);
         Assert.Equal(HttpStatusCode.Conflict,
             (await PourAsync(admin, plan.Plan.Id, withFailed.Lines.Single().Id, 10m, "10:00:00", fx.Pump2)).StatusCode);
 
-        // A survey of another customer cannot be tagged.
-        var otherCustomer = await CreateCustomerAsync(admin, "C2");
-        var otherSite = await CreateSiteAsync(admin, otherCustomer, "Other site");
-        var foreign = await SurveyAsync(otherSite, "Ok", "2026-06-01");
-        var foreignTag = await admin.PostAsJsonAsync("/api/orders", new
-        {
-            customerId = fx.W.CustomerId,
-            siteId = fx.W.SiteId,
-            plantId = fx.W.PlantId,
-            requestedDate = "2026-06-01",
-            distanceKm = 5m,
-            surveyId = foreign,
-            lines = new[] { LineBody(fx.W.ProductId, 10m) }
-        });
-        Assert.Equal(HttpStatusCode.BadRequest, foreignTag.StatusCode);
+        // A pumped order with neither a tag nor a request cannot be submitted under the PumpJobs rule.
+        var untagged = await admin.PostAsJsonAsync("/api/orders", OrderBody(fx.W, pumped, requestSurvey: false));
+        var untaggedId = (await untagged.Content.ReadFromJsonAsync<OrderDetailDto>(ApiFactory.Json))!.Order.Id;
+        var submit = await admin.PostAsync($"/api/orders/{untaggedId}/submit", null);
+        Assert.Equal(HttpStatusCode.Conflict, submit.StatusCode);
+        Assert.Contains("This order needs a site survey.", await submit.Content.ReadAsStringAsync());
 
-        // Once three newer surveys exist, the oldest one is no longer among the last three.
-        await SurveyAsync(fx.W.SiteId, "Ok", "2026-06-01");
-        await SurveyAsync(fx.W.SiteId, "Ok", "2026-06-02");
-        await SurveyAsync(siteB, "Ok", "2026-06-03");
-        var tooOld = await admin.PostAsJsonAsync("/api/orders", new
-        {
-            customerId = fx.W.CustomerId,
-            siteId = fx.W.SiteId,
-            plantId = fx.W.PlantId,
-            requestedDate = "2026-06-01",
-            distanceKm = 5m,
-            surveyId = failed,
-            lines = new[] { LineBody(fx.W.ProductId, 10m) }
-        });
+        // Tagging and requesting at once is refused.
+        var both = await admin.PostAsJsonAsync("/api/orders", OrderBody(fx.W, pumped, surveyId: passed, requestSurvey: true));
+        Assert.Equal(HttpStatusCode.BadRequest, both.StatusCode);
+
+        // A survey of another site of the same customer cannot be tagged.
+        var fromSiteB = await SurveyAsync(atSiteB, "Ok", "2026-06-01");
+        var otherSite = await admin.PostAsJsonAsync("/api/orders", OrderBody(fx.W, pumped, surveyId: fromSiteB));
+        Assert.Equal(HttpStatusCode.BadRequest, otherSite.StatusCode);
+        Assert.Contains("Tag one of this site's last three surveys.", await otherSite.Content.ReadAsStringAsync());
+
+        // Once three newer surveys of the site exist, the oldest is no longer among the last three.
+        await SurveyAsync(fx.W, "Ok", "2026-06-02");
+        await SurveyAsync(fx.W, "Ok", "2026-06-03");
+        var tooOld = await admin.PostAsJsonAsync("/api/orders", OrderBody(fx.W, pumped, surveyId: failed));
         Assert.Equal(HttpStatusCode.BadRequest, tooOld.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_confirmed_order_can_tag_another_survey_until_a_pour_relies_on_it()
+    {
+        var company = await factory.CreateCompanyAsync();
+        var admin = company.Admin.Client;
+        var planner = await factory.AddMemberAsync(company, "Planner");
+        var fx = await SetupAsync(admin);
+        var first = (await admin.GetFromJsonAsync<OrderDetailDto>($"/api/orders/{fx.OrderId}", ApiFactory.Json))!.Order.SurveyId;
+
+        // A second order's survey of the same site can be tagged on the confirmed order instead.
+        var other = await CreateDraftAsync(admin, fx.W, [LineBody(fx.W.ProductId, 10m, null, "Slab", "Pump")]);
+        var second = await RecordSurveyAsync(admin, other.Order.Id, "Ok", "2026-05-31");
+
+        // Only orders.edit may change it.
+        Assert.Equal(HttpStatusCode.Forbidden, (await TagSurveyAsync(planner.Client, fx.OrderId, second.Id)).StatusCode);
+        (await TagSurveyAsync(admin, fx.OrderId, second.Id)).EnsureSuccessStatusCode();
+
+        var order = (await admin.GetFromJsonAsync<OrderDetailDto>($"/api/orders/{fx.OrderId}", ApiFactory.Json))!;
+        Assert.Equal(second.Id, order.Order.SurveyId);
+        Assert.NotEqual(first, order.Order.SurveyId);
+
+        // Past the draft, the order cannot drop to no survey while it has a pumped line.
+        var none = await TagSurveyAsync(admin, fx.OrderId, null);
+        Assert.Equal(HttpStatusCode.Conflict, none.StatusCode);
+        Assert.Contains("This order needs a site survey.", await none.Content.ReadAsStringAsync());
+
+        var audit = await admin.GetFromJsonAsync<List<AuditLogDto>>("/api/audit", ApiFactory.Json);
+        Assert.Contains(audit!, e => e.Action == "order.survey_changed" && e.EntityId == fx.OrderId.ToString());
+
+        // Another company cannot touch it.
+        var stranger = (await factory.CreateCompanyAsync()).Admin.Client;
+        Assert.Equal(HttpStatusCode.NotFound, (await RequestSurveyAsync(stranger, fx.OrderId)).StatusCode);
     }
 }

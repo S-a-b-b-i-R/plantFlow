@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LuCheck, LuSearch } from "react-icons/lu";
 import { Field } from "./Field";
+import { SurveyChoice } from "./SurveyChoice";
 import { inputClass, textareaClass } from "./styles";
 import { useStoredDistance } from "./useStoredDistance";
 import type { Draft } from "./orderDraft";
@@ -12,9 +13,7 @@ import type {
     PlantOption,
     SalesRepOption,
     SiteOption,
-    SurveyOption,
 } from "@/lib/orders";
-import { shortDate } from "@/lib/orders";
 import { cn } from "@/lib/utils";
 
 export function CustomerStep({
@@ -57,13 +56,6 @@ export function CustomerStep({
                 "/api/sales-reps?status=Active&pageSize=100",
             ),
     });
-    const surveys = useQuery({
-        queryKey: ["surveys", draft.customerId],
-        queryFn: () =>
-            api<SurveyOption[]>(`/api/customers/${draft.customerId}/surveys`),
-        enabled: !!draft.customerId,
-        retry: false,
-    });
     const stored = useStoredDistance(draft.siteId, draft.plantId);
 
     const pickCustomer = (c: CustomerOption) =>
@@ -73,6 +65,7 @@ export function CustomerStep({
             salesRepId: c.salesRepId ?? "",
             siteId: "",
             surveyId: "",
+            requestSurvey: false,
         });
 
     const usableSites = (sites.data?.items ?? []).filter(
@@ -98,6 +91,7 @@ export function CustomerStep({
                                         customerName: "",
                                         siteId: "",
                                         surveyId: "",
+                                        requestSurvey: false,
                                     })
                                 }
                                 className="h-9 rounded-sm border bg-card px-3 text-sm hover:border-ink"
@@ -179,7 +173,15 @@ export function CustomerStep({
                                         key={s.id}
                                         selected={draft.siteId === s.id}
                                         onSelect={() =>
-                                            change({ siteId: s.id })
+                                            change(
+                                                s.id === draft.siteId
+                                                    ? { siteId: s.id }
+                                                    : {
+                                                          siteId: s.id,
+                                                          surveyId: "",
+                                                          requestSurvey: false,
+                                                      },
+                                            )
                                         }
                                         title={s.name}
                                         detail={s.address}
@@ -280,30 +282,20 @@ export function CustomerStep({
                                     className={inputClass}
                                 />
                             </Field>
-                            {surveys.data && surveys.data.length > 0 && (
+                            {draft.siteId && (
                                 <Field
                                     label="Site survey"
-                                    hint="Planning checks this survey for pump jobs."
+                                    hint="Pump jobs need a survey before they can be planned. Pick one of the site's last three, or ask a surveyor for a new one."
                                     className="sm:col-span-2"
                                 >
-                                    <select
-                                        value={draft.surveyId}
-                                        onChange={(e) =>
-                                            change({ surveyId: e.target.value })
-                                        }
-                                        className={inputClass}
-                                    >
-                                        <option value="">
-                                            No survey tagged
-                                        </option>
-                                        {surveys.data.map((s) => (
-                                            <option key={s.id} value={s.id}>
-                                                {s.siteName},{" "}
-                                                {shortDate(s.surveyedOn)},{" "}
-                                                {s.result}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <SurveyChoice
+                                        siteId={draft.siteId}
+                                        value={{
+                                            surveyId: draft.surveyId,
+                                            requestSurvey: draft.requestSurvey,
+                                        }}
+                                        onChange={change}
+                                    />
                                 </Field>
                             )}
                             <Field label="Notes" className="sm:col-span-2">

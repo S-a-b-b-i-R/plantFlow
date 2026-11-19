@@ -15,6 +15,7 @@ public partial class PourPlanningTests
     private async Task<Scene> ApprovedPourAsync(HttpClient admin, decimal cft = 100m, bool approve = true)
     {
         var fx = await SetupAsync(admin);
+        var survey = (await admin.GetFromJsonAsync<OrderDetailDto>($"/api/orders/{fx.OrderId}", ApiFactory.Json))!.Order.SurveyId;
 
         var created = await admin.PostAsJsonAsync("/api/orders", new
         {
@@ -23,6 +24,7 @@ public partial class PourPlanningTests
             plantId = fx.W.PlantId,
             requestedDate = "2026-06-01",
             distanceKm = 5m,
+            surveyId = survey,
             lines = new[] { LineBody(fx.W.ProductId, cft, null, "Slab", "Pump") }
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);

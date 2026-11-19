@@ -34,7 +34,7 @@ export default function App() {
                         <Route path="surveys" element={<Surveys />} />
                         <Route path="surveys/:siteId" element={<SiteSurveys />} />
                         <Route
-                            path="surveys/:siteId/new"
+                            path="surveys/requests/:orderId"
                             element={<SurveyForm />}
                         />
                         <Route path="operator" element={<Operator />} />
