@@ -13,6 +13,12 @@ using PlantFlow.Api.Services;
 
 namespace PlantFlow.Api.Controllers;
 
+// A confirmed or running order line that still has CFT left to put on a shift plan.
+public record LineToPlanDto(
+    Guid OrderId, string OrderNumber, string CustomerName, string SiteName, DateOnly RequestedDate,
+    Guid OrderLineId, string ProductCode, PourMethod PourMethod, PourElement PourElement,
+    decimal QuantityCft, decimal PlannedCft, decimal RemainingCft, bool Overdue);
+
 public record ShiftPlanSummaryDto(
     Guid Id, Guid PlantId, string PlantCode, DateOnly Date, Guid ShiftId, string ShiftName,
     TimeOnly ShiftStart, TimeOnly ShiftEnd, ShiftPlanStatus Status, int PourCount, decimal TotalPlannedCft,
@@ -110,6 +116,32 @@ public class ShiftPlansController(
 
         query = query.OrderByDescending(p => p.Date).ThenBy(p => p.Shift.StartTime);
         return await query.Select(ToSummary).ToPagedAsync(paging, cancellationToken);
+    }
+
+    // Lines of this plant's confirmed or running orders, requested on this date or earlier, with CFT not yet planned.
+    // Overdue means the requested date is before the day being planned.
+    [HttpGet("api/shift-plans/to-plan")]
+    [HasPermission(Permissions.DeliveriesTrack)]
+    public async Task<ActionResult<List<LineToPlanDto>>> ToPlan(
+        [FromQuery] Guid plantId, [FromQuery] DateOnly date, CancellationToken cancellationToken)
+    {
+        var rows = await db.OrderLines.AsNoTracking()
+            .Where(l => l.Order.PlantId == plantId && l.Order.RequestedDate <= date
+                && (l.Order.Status == OrderStatus.Confirmed || l.Order.Status == OrderStatus.InProgress))
+            .Select(l => new
+            {
+                l.OrderId, l.Order.Number, l.Order.Sequence, CustomerName = l.Order.Customer.Name, SiteName = l.Order.Site.Name,
+                l.Order.RequestedDate, LineId = l.Id, ProductCode = l.Product.Code, l.PourMethod, l.PourElement, l.QuantityCft,
+                Planned = db.Pours.Where(p => p.OrderLineId == l.Id).Sum(p => (decimal?)p.PlannedCft) ?? 0m
+            })
+            .Where(r => r.QuantityCft > r.Planned)
+            .OrderBy(r => r.RequestedDate).ThenBy(r => r.Sequence).ThenBy(r => r.LineId)
+            .Take(200)
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(r => new LineToPlanDto(
+            r.OrderId, r.Number, r.CustomerName, r.SiteName, r.RequestedDate, r.LineId, r.ProductCode, r.PourMethod,
+            r.PourElement, r.QuantityCft, r.Planned, r.QuantityCft - r.Planned, r.RequestedDate < date)).ToList();
     }
 
     [HttpGet("api/shift-plans/{id:guid}")]
