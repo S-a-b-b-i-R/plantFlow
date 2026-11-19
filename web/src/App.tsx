@@ -8,6 +8,7 @@ import { Operator } from "@/pages/Operator";
 import { OrderForm } from "@/pages/OrderForm";
 import { OrderPage } from "@/pages/OrderPage";
 import { Orders } from "@/pages/Orders";
+import { Planning } from "@/pages/Planning";
 import { Pricing } from "@/pages/Pricing";
 import { Quality } from "@/pages/Quality";
 
@@ -23,6 +24,7 @@ export default function App() {
                         <Route path="orders/new" element={<OrderForm />} />
                         <Route path="orders/:id" element={<OrderPage />} />
                         <Route path="orders/:id/edit" element={<OrderForm />} />
+                        <Route path="planning" element={<Planning />} />
                         <Route path="pricing" element={<Pricing />} />
                         <Route path="pricing/:tab" element={<Pricing />} />
                         <Route path="operator" element={<Operator />} />
