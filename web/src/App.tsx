@@ -5,6 +5,9 @@ import { AppShell } from "@/layout/AppShell";
 import { Home } from "@/pages/Home";
 import { LiveBoard } from "@/pages/LiveBoard";
 import { Operator } from "@/pages/Operator";
+import { OrderForm } from "@/pages/OrderForm";
+import { OrderPage } from "@/pages/OrderPage";
+import { Orders } from "@/pages/Orders";
 import { Quality } from "@/pages/Quality";
 
 export default function App() {
@@ -15,6 +18,10 @@ export default function App() {
                     <Route index element={<Home />} />
                     <Route element={<RequirePermission />}>
                         <Route path="live" element={<LiveBoard />} />
+                        <Route path="orders" element={<Orders />} />
+                        <Route path="orders/new" element={<OrderForm />} />
+                        <Route path="orders/:id" element={<OrderPage />} />
+                        <Route path="orders/:id/edit" element={<OrderForm />} />
                         <Route path="operator" element={<Operator />} />
                         <Route path="quality" element={<Quality />} />
                     </Route>

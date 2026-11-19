@@ -8,6 +8,17 @@ export const PERMISSIONS = {
     deliveriesPlanOverride: "deliveries.plan.override",
     returnsManage: "returns.manage",
     returnsQc: "returns.qc",
+    masterDataView: "masterdata.view",
+    pricesView: "prices.view",
+    ordersView: "orders.view",
+    ordersCreate: "orders.create",
+    ordersEdit: "orders.edit",
+    ordersApproveSalesManager: "orders.approve.salesmanager",
+    ordersApproveManagement: "orders.approve.management",
+    ordersApproveCredit: "orders.approve.credit",
+    ordersConfirm: "orders.confirm",
+    ordersClose: "orders.close",
+    ordersBillingResolve: "orders.billing.resolve",
 };
 
 export const can = (me: Me, permission: string) =>
