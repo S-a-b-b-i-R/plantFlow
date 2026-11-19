@@ -4,6 +4,7 @@ import { useMe } from "@/auth/useMe";
 import { panelClass } from "@/components/orders/styles";
 import { kinds } from "@/components/pricing/kinds";
 import { MarginReport } from "@/components/pricing/MarginReport";
+import { PolicyPanel } from "@/components/pricing/PolicyPanel";
 import { PendingSection, PricingList } from "@/components/pricing/PricingList";
 import { usePendingTotal } from "@/components/pricing/useBook";
 import type { PriceBookKind } from "@/components/pricing/kind";
@@ -33,7 +34,7 @@ export function Pricing() {
     const known =
         tab === "approvals"
             ? hasInbox
-            : tab === "margins"
+            : tab === "margins" || tab === "rules"
               ? hasMargins
               : !!current;
     if (!known) {
@@ -80,12 +81,19 @@ export function Pricing() {
                         Cost and margin
                     </NavLink>
                 )}
+                {hasMargins && (
+                    <NavLink to="/pricing/rules" className={tabClass}>
+                        Pricing rules
+                    </NavLink>
+                )}
             </nav>
 
             {current ? (
                 <PricingList key={current.key} kind={current} />
             ) : tab === "margins" ? (
                 <MarginReport />
+            ) : tab === "rules" ? (
+                <PolicyPanel />
             ) : (
                 <Inbox kinds={deciding} />
             )}

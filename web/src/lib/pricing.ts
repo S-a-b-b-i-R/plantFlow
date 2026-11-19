@@ -190,3 +190,29 @@ export interface FloorBreakdown {
     vat: number;
     floorPriceWithVat: number;
 }
+
+export type CustomerType = "Contractor" | "Developer" | "Individual";
+
+export const customerTypes: CustomerType[] = [
+    "Contractor",
+    "Developer",
+    "Individual",
+];
+
+export interface PricingPolicy {
+    vatPercent: number;
+    minMarginPercent: number;
+    aitRates: { customerType: CustomerType; percent: number }[];
+}
+
+// A percentage between 0 and the limit with at most 2 decimals. Empty is not valid.
+export const validPercent = (text: string, max: number) => {
+    const value = Number(text);
+    return (
+        text.trim() !== "" &&
+        Number.isFinite(value) &&
+        value >= 0 &&
+        value <= max &&
+        Math.abs(value - Number(value.toFixed(2))) < 1e-9
+    );
+};

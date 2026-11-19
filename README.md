@@ -2,7 +2,7 @@
 
 Multi-tenant operations platform for ready-mix concrete companies: orders, pricing, shift planning, batching and dispatch, returns and quality control, and live dashboards.
 
-> **Status: in active development.** The API covers the full flow from master data to billing, and the React app already runs the plant floor: a live operations board, a batching console, the quality screen, the orders area (create, approve, confirm, bill) and the pricing area (recipes, costs, selling prices, their approvals and the cost and margin report). Shift planning and administration screens are next. See [Roadmap](#roadmap).
+> **Status: in active development.** The API covers the full flow from master data to billing, and the React app already runs the plant floor: a live operations board, a batching console, the quality screen, the orders area (create, approve, confirm, bill) and the pricing area (recipes, costs, selling prices, their approvals, the cost and margin report and the pricing rules). Shift planning and administration screens are next. See [Roadmap](#roadmap).
 
 PlantFlow is an independent portfolio project, designed from public domain knowledge in [`docs/domain-spec-v4.md`](docs/domain-spec-v4.md). All data is synthetic.
 
