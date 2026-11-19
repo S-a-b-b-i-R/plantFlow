@@ -2,7 +2,7 @@
 
 Multi-tenant operations platform for ready-mix concrete companies: orders, pricing, shift planning, batching and dispatch, returns and quality control, and live dashboards.
 
-> **Status: in active development.** The API covers the full flow from master data to billing, and the React app already runs the plant floor: a live operations board and a batching console. The office screens (orders, approvals, billing) are next. See [Roadmap](#roadmap).
+> **Status: in active development.** The API covers the full flow from master data to billing, and the React app already runs the plant floor: a live operations board, a batching console, the quality screen and the orders area (create, approve, confirm, bill). Shift planning and administration screens are next. See [Roadmap](#roadmap).
 
 PlantFlow is an independent portfolio project, designed from public domain knowledge in [`docs/domain-spec-v4.md`](docs/domain-spec-v4.md). All data is synthetic.
 
@@ -55,7 +55,8 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 | Returns and QC: part returns, rejects, inspection, treatment, dumping, reuse, billing adjustments    | Done    |
 | Dashboards: live operations, production and delivery, orders and billing                             | Done    |
 | React app: sign-in and approval flow, live operations board, batching console                        | Done    |
-| React screens for orders, approvals, billing and administration                                      | Planned |
+| React screens: quality control, orders, approvals, confirmation and billing                          | Done    |
+| React screens: shift planning and administration                                                     | Planned |
 | Quarterly volume targets, customer volume ledger                                                     | Planned |
 
 ## Architecture
@@ -177,7 +178,7 @@ Integration tests start a throwaway SQL Server container (Docker must be running
 
 ## Roadmap
 
-1. **Office screens in the web app:** orders, approvals, confirmation and billing, shift planning
+1. **Shift planning screens in the web app**
 2. **Administration screens:** assigning users to companies, roles and permissions
 3. **Targets and ledger:** quarterly volume targets against billed volume, customer volume ledger
 4. **Web tests:** component tests for the console and the board

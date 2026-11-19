@@ -62,6 +62,26 @@ public static class DemoLiveDaySeeder
             .Where(p => p.TenantId == tenantId).OrderBy(p => p.Code).Select(p => p.Id).Take(4).ToListAsync();
         if (mixers.Count < 4 || pumps.Count < 2 || sites.Count < 4 || productIds.Count < 4) return;
 
+        // A truck can only have one open load. Loads left over from an earlier shift's demo are closed first,
+        // or the new shift's loads would collide with them.
+        var mixerIds = mixers.Select(m => m.Id).ToList();
+        var stale = await db.TruckLoads.IgnoreQueryFilters()
+            .Where(l => l.TenantId == tenantId && mixerIds.Contains(l.TruckId)
+                && l.CancelledAtUtc == null && l.ReturnedAtUtc == null)
+            .ToListAsync();
+        foreach (var load in stale)
+        {
+            if (load.PouringEndedAtUtc is { } ended)
+            {
+                load.ReturnedAtUtc = ended.AddMinutes(TravelMinutes);
+            }
+            else
+            {
+                load.CancelledAtUtc = nowUtc;
+                load.CancelReason = "Left over from an earlier demo shift";
+            }
+        }
+
         DateTime Local(int minutesFromNow) =>
             DateTime.SpecifyKind(nowLocal.AddMinutes(minutesFromNow), DateTimeKind.Unspecified);
         DateTime Utc(int minutesFromNow) => nowUtc.AddMinutes(minutesFromNow);

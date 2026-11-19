@@ -1,5 +1,10 @@
 import type { IconType } from "react-icons";
-import { LuActivity, LuFlaskConical, LuTruck } from "react-icons/lu";
+import {
+    LuActivity,
+    LuClipboardList,
+    LuFlaskConical,
+    LuTruck,
+} from "react-icons/lu";
 import { can, PERMISSIONS } from "@/auth/permissions";
 import type { Me } from "@/lib/types";
 
@@ -19,6 +24,12 @@ export const navigation: NavItem[] = [
         permissions: [PERMISSIONS.dashboardsView],
     },
     {
+        to: "/orders",
+        label: "Orders",
+        icon: LuClipboardList,
+        permissions: [PERMISSIONS.ordersView],
+    },
+    {
         to: "/operator",
         label: "Batching",
         icon: LuTruck,
@@ -35,6 +46,21 @@ export const navigation: NavItem[] = [
 export const canOpen = (me: Me, item: NavItem) =>
     item.permissions.every((permission) => can(me, permission));
 
-// Where someone lands: the first screen they are allowed to use.
-export const firstAllowed = (me: Me) =>
-    navigation.find((item) => canOpen(me, item))?.to ?? null;
+// Where someone lands. People who sell, approve or bill start on orders, everyone else on the first screen they can use.
+export const firstAllowed = (me: Me) => {
+    const office = [
+        PERMISSIONS.ordersCreate,
+        PERMISSIONS.ordersApproveSalesManager,
+        PERMISSIONS.ordersApproveManagement,
+        PERMISSIONS.ordersApproveCredit,
+        PERMISSIONS.ordersBillingResolve,
+    ].some((permission) => can(me, permission));
+    const preferred = office
+        ? navigation.find((item) => item.to === "/orders")
+        : undefined;
+    const item =
+        preferred && canOpen(me, preferred)
+            ? preferred
+            : navigation.find((entry) => canOpen(me, entry));
+    return item?.to ?? null;
+};

@@ -7,7 +7,9 @@ import { canOpen, navigation } from "@/layout/navigation";
 export function RequirePermission() {
     const me = useMe().data!;
     const { pathname } = useLocation();
-    const item = navigation.find((entry) => entry.to === pathname);
+    const item = navigation.find(
+        (entry) => pathname === entry.to || pathname.startsWith(`${entry.to}/`),
+    );
 
     if (item && !canOpen(me, item)) {
         return <Navigate to="/" replace />;
