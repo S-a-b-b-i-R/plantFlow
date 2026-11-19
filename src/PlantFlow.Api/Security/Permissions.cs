@@ -17,6 +17,7 @@ public static class Permissions
     public const string MixDesignsEdit = "mixdesigns.edit";
     public const string MixDesignsApprove = "mixdesigns.approve";
     public const string CostsManage = "costs.manage";
+    public const string CostsApprove = "costs.approve";
     public const string PricesView = "prices.view";
     public const string PricesEdit = "prices.edit";
     public const string PricesApprove = "prices.approve";

@@ -40,7 +40,7 @@ public class FloorPriceCalculator(PlantFlowDbContext db)
 
         var materialIds = design.Items.Select(i => i.MaterialId).ToList();
         var costs = await db.MaterialCosts.AsNoTracking()
-            .Where(c => materialIds.Contains(c.MaterialId) && c.EffectiveFrom <= date
+            .Where(c => materialIds.Contains(c.MaterialId) && c.Status == CostStatus.Approved && c.EffectiveFrom <= date
                         && (c.PlantId == plantId || c.PlantId == null))
             .ToListAsync(cancellationToken);
 
@@ -53,7 +53,7 @@ public class FloorPriceCalculator(PlantFlowDbContext db)
 
             if (cost is null)
             {
-                return new(null, $"No cost is set for material {item.Material.Code} on {date:yyyy-MM-dd}.");
+                return new(null, $"No approved cost is set for material {item.Material.Code} on {date:yyyy-MM-dd}.");
             }
 
             lines.Add(new(item.Material.Code, item.Material.Unit, item.QuantityPerCft, cost.CostPerUnit,
@@ -61,7 +61,7 @@ public class FloorPriceCalculator(PlantFlowDbContext db)
         }
 
         var overheads = await db.OverheadCosts.AsNoTracking()
-            .Where(c => c.ValidFrom <= date && (c.ValidTo == null || c.ValidTo >= date)
+            .Where(c => c.Status == CostStatus.Approved && c.ValidFrom <= date && (c.ValidTo == null || c.ValidTo >= date)
                         && (c.PlantId == plantId || c.PlantId == null))
             .ToListAsync(cancellationToken);
 
@@ -69,7 +69,7 @@ public class FloorPriceCalculator(PlantFlowDbContext db)
 
         // A plant's own bands replace the general bands.
         var bands = await db.DeliveryChargeBands.AsNoTracking()
-            .Where(b => b.PlantId == plantId || b.PlantId == null)
+            .Where(b => b.Status == CostStatus.Approved && (b.PlantId == plantId || b.PlantId == null))
             .ToListAsync(cancellationToken);
         var scope = bands.Any(b => b.PlantId == plantId) ? bands.Where(b => b.PlantId == plantId) : bands.Where(b => b.PlantId == null);
         var delivery = scope.FirstOrDefault(b => distanceKm > b.FromKm && (b.ToKm == null || distanceKm <= b.ToKm))?.ChargePerCft ?? 0m;

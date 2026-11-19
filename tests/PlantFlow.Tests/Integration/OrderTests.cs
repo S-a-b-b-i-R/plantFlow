@@ -22,10 +22,8 @@ public class OrderTests(ApiFactory factory)
         var customerId = await CreateCustomerAsync(admin, "C1");
         var siteId = await CreateSiteAsync(admin, customerId, "Tower A");
 
-        (await admin.PostAsJsonAsync("/api/material-costs",
-            new { materialId = cement, costPerUnit = 8m, effectiveFrom = "2026-01-01" })).EnsureSuccessStatusCode();
-        (await admin.PostAsJsonAsync("/api/overhead-costs",
-            new { kind = "Overhead", name = "Labour", amountPerCft = 10m, validFrom = "2026-01-01" })).EnsureSuccessStatusCode();
+        await CreateApprovedMaterialCostAsync(admin, cement, 8m);
+        await CreateApprovedOverheadAsync(admin, "Overhead", 10m);
 
         var productId = await CreateProductAsync(admin, productCode);
         await CreateApprovedDesignAsync(admin, productId, new[] { new { materialId = cement, quantityPerCft = 10m } });
@@ -122,8 +120,7 @@ public class OrderTests(ApiFactory factory)
         var siteWithoutDistance = await CreateSiteAsync(admin, w.CustomerId, "Tower B");
 
         // Free up to 15 km, then 9 per CFT up to 30 km.
-        (await admin.PostAsJsonAsync("/api/delivery-charges",
-            new { fromKm = 15m, toKm = 30m, chargePerCft = 9m })).EnsureSuccessStatusCode();
+        await CreateApprovedBandAsync(admin, 15m, 30m, 9m);
         (await admin.PutAsJsonAsync($"/api/sites/{w.SiteId}/distances",
             new { distances = new[] { new { plantId = w.PlantId, distanceKm = 20m } } })).EnsureSuccessStatusCode();
 
@@ -147,8 +144,7 @@ public class OrderTests(ApiFactory factory)
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
         var w = await WorldAsync(admin);
-        (await admin.PostAsJsonAsync("/api/delivery-charges",
-            new { fromKm = 15m, toKm = 30m, chargePerCft = 9m })).EnsureSuccessStatusCode();
+        await CreateApprovedBandAsync(admin, 15m, 30m, 9m);
 
         var order = await CreateOrderAsync(admin, w, [Line(w.ProductId, 10m, element: "Slab"), Line(w.ProductId, 20m, element: "Column")]);
         var keep = order.Lines.Single(l => l.PourElement == PourElement.Slab);

@@ -39,6 +39,43 @@ public static class TestData
         return (await response.Content.ReadFromJsonAsync<MaterialDto>(ApiFactory.Json))!.Id;
     }
 
+    // Takes the response of creating a cost row, submits it and approves it. The created response comes back,
+    // unless creating or approving failed: then that response comes back, so tests can look at the status.
+    public static async Task<HttpResponseMessage> ApproveCostAsync(HttpClient client, string route, HttpResponseMessage created)
+    {
+        if (created.StatusCode != HttpStatusCode.Created) return created;
+
+        var json = await created.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var id = json.GetProperty("id").GetGuid();
+
+        (await client.PostAsync($"{route}/{id}/submit", null)).EnsureSuccessStatusCode();
+        var approved = await client.PostAsync($"{route}/{id}/approve", null);
+        return approved.IsSuccessStatusCode ? created : approved;
+    }
+
+    public static async Task CreateApprovedMaterialCostAsync(HttpClient client, Guid materialId, decimal cost, string from = "2026-01-01")
+    {
+        var created = await client.PostAsJsonAsync("/api/material-costs",
+            new { materialId, costPerUnit = cost, effectiveFrom = from });
+        (await ApproveCostAsync(client, "/api/material-costs", created)).EnsureSuccessStatusCode();
+    }
+
+    public static async Task CreateApprovedOverheadAsync(
+        HttpClient client, string kind, decimal amount, Guid? plantId = null, string from = "2026-01-01", string? to = null)
+    {
+        var created = await client.PostAsJsonAsync("/api/overhead-costs",
+            new { kind, name = $"{kind} cost", plantId, amountPerCft = amount, validFrom = from, validTo = to });
+        (await ApproveCostAsync(client, "/api/overhead-costs", created)).EnsureSuccessStatusCode();
+    }
+
+    public static async Task CreateApprovedBandAsync(
+        HttpClient client, decimal fromKm, decimal? toKm, decimal charge, Guid? plantId = null)
+    {
+        var created = await client.PostAsJsonAsync("/api/delivery-charges",
+            new { plantId, fromKm, toKm, chargePerCft = charge });
+        (await ApproveCostAsync(client, "/api/delivery-charges", created)).EnsureSuccessStatusCode();
+    }
+
     // Creates a mix design, submits it and approves it. Items look like new[] { new { materialId, quantityPerCft } }.
     public static async Task<MixDesignDetailDto> CreateApprovedDesignAsync(
         HttpClient client, Guid productId, object items, Guid? plantId = null)
@@ -85,10 +122,8 @@ public static class TestData
         var customerId = await CreateCustomerAsync(admin, "C1");
         var siteId = await CreateSiteAsync(admin, customerId, "Tower A");
 
-        (await admin.PostAsJsonAsync("/api/material-costs",
-            new { materialId = cement, costPerUnit = 8m, effectiveFrom = "2026-01-01" })).EnsureSuccessStatusCode();
-        (await admin.PostAsJsonAsync("/api/overhead-costs",
-            new { kind = "Overhead", name = "Labour", amountPerCft = 10m, validFrom = "2026-01-01" })).EnsureSuccessStatusCode();
+        await CreateApprovedMaterialCostAsync(admin, cement, 8m);
+        await CreateApprovedOverheadAsync(admin, "Overhead", 10m);
 
         var productId = await CreateProductAsync(admin, productCode);
         await CreateApprovedDesignAsync(admin, productId, new[] { new { materialId = cement, quantityPerCft = 10m } });

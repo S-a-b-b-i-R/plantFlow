@@ -85,6 +85,7 @@ if (app.Environment.IsDevelopment())
 {
     await DbSeeder.EnsureDemoTenantAsync(app.Services);
     await DemoDataSeeder.EnsureDemoDataAsync(app.Services);
+    await DemoPriceBookSeeder.EnsurePriceBookAsync(app.Services);
     await DemoAccessSeeder.EnsureAdminInDemoCompanyAsync(app.Services);
     await DemoLiveDaySeeder.EnsureLiveDayAsync(app.Services);
 }

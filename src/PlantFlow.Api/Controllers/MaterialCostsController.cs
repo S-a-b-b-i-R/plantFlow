@@ -13,7 +13,14 @@ namespace PlantFlow.Api.Controllers;
 
 public record MaterialCostDto(
     Guid Id, Guid MaterialId, string MaterialCode, string MaterialName, MaterialUnit Unit,
-    Guid? PlantId, string? PlantCode, decimal CostPerUnit, DateOnly EffectiveFrom);
+    Guid? PlantId, string? PlantCode, decimal CostPerUnit, DateOnly EffectiveFrom,
+    CostStatus Status, string? RejectionReason, DateTime? ApprovedAtUtc);
+
+public class RejectCostRequest
+{
+    [Required, StringLength(500, MinimumLength = 3)]
+    public string Reason { get; init; } = "";
+}
 
 public class CreateMaterialCostRequest
 {
@@ -46,18 +53,21 @@ public class MaterialCostsController(PlantFlowDbContext db, ICurrentUser current
 {
     private static readonly Expression<Func<MaterialCost, MaterialCostDto>> ToDto = c => new MaterialCostDto(
         c.Id, c.MaterialId, c.Material.Code, c.Material.Name, c.Material.Unit,
-        c.PlantId, c.Plant != null ? c.Plant.Code : null, c.CostPerUnit, c.EffectiveFrom);
+        c.PlantId, c.Plant != null ? c.Plant.Code : null, c.CostPerUnit, c.EffectiveFrom,
+        c.Status, c.RejectionReason, c.ApprovedAtUtc);
 
-    // ?search= matches material code or name.  ?materialId=  ?plantId=
+    // ?search= matches material code or name.  ?materialId=  ?plantId=  ?status=
     [HttpGet]
-    [HasPermission(Permissions.CostsManage)]
+    [HasPermission(Permissions.CostsManage, Permissions.CostsApprove)]
     public async Task<ActionResult<PagedResult<MaterialCostDto>>> List(
-        [FromQuery] PageQuery paging, [FromQuery] Guid? materialId, [FromQuery] Guid? plantId, CancellationToken cancellationToken)
+        [FromQuery] PageQuery paging, [FromQuery] Guid? materialId, [FromQuery] Guid? plantId, [FromQuery] CostStatus? status,
+        CancellationToken cancellationToken)
     {
         var query = db.MaterialCosts.AsNoTracking();
 
         if (materialId is not null) query = query.Where(c => c.MaterialId == materialId);
         if (plantId is not null) query = query.Where(c => c.PlantId == plantId);
+        if (status is not null) query = query.Where(c => c.Status == status);
 
         if (!string.IsNullOrWhiteSpace(paging.Search))
         {
@@ -72,7 +82,7 @@ public class MaterialCostsController(PlantFlowDbContext db, ICurrentUser current
     }
 
     [HttpGet("{id:guid}")]
-    [HasPermission(Permissions.CostsManage)]
+    [HasPermission(Permissions.CostsManage, Permissions.CostsApprove)]
     public async Task<ActionResult<MaterialCostDto>> Get(Guid id, CancellationToken cancellationToken)
     {
         var dto = await db.MaterialCosts.AsNoTracking().Where(c => c.Id == id).Select(ToDto)
@@ -132,6 +142,11 @@ public class MaterialCostsController(PlantFlowDbContext db, ICurrentUser current
         var cost = await db.MaterialCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
         if (cost is null) return NotFound();
 
+        if (CostWorkflow.RequireDraft(cost, "material cost", "edited") is { } notDraft)
+        {
+            return Problem(title: notDraft, statusCode: StatusCodes.Status409Conflict);
+        }
+
         if (request.CostPerUnit != Math.Round(request.CostPerUnit, 4))
         {
             return Problem(title: "The cost can have at most 4 decimal places.", statusCode: StatusCodes.Status400BadRequest);
@@ -156,7 +171,7 @@ public class MaterialCostsController(PlantFlowDbContext db, ICurrentUser current
         return NoContent();
     }
 
-    // Nothing references a cost row yet, so a wrong one can simply be removed.
+    // Only a draft can be removed. An approved cost is retired instead, so the history stays.
     [HttpDelete("{id:guid}")]
     [HasPermission(Permissions.CostsManage)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
@@ -164,9 +179,86 @@ public class MaterialCostsController(PlantFlowDbContext db, ICurrentUser current
         var cost = await db.MaterialCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
         if (cost is null) return NotFound();
 
+        if (CostWorkflow.RequireDraft(cost, "material cost", "deleted") is { } notDraft)
+        {
+            return Problem(title: notDraft, statusCode: StatusCodes.Status409Conflict);
+        }
+
         db.MaterialCosts.Remove(cost);
         audit.Record(cost.TenantId, "materialcost.deleted", "MaterialCost", cost.Id.ToString(),
             new { cost.MaterialId, cost.PlantId, cost.CostPerUnit, cost.EffectiveFrom });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    // Management approval. From then on the floor price uses it, from its effective date.
+    [HttpPost("{id:guid}/approve")]
+    [HasPermission(Permissions.CostsApprove)]
+    public async Task<IActionResult> Approve(Guid id, CancellationToken cancellationToken)
+    {
+        var cost = await db.MaterialCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (cost is null) return NotFound();
+
+        if (CostWorkflow.RequirePending(cost, "material cost") is { } why)
+        {
+            return Problem(title: why, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        CostWorkflow.MarkApproved(cost, currentUser.UserId);
+        audit.Record(cost.TenantId, "materialcost.approved", "MaterialCost", cost.Id.ToString(),
+            new { cost.MaterialId, cost.PlantId, cost.CostPerUnit, cost.EffectiveFrom });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/submit")]
+    [HasPermission(Permissions.CostsManage)]
+    public async Task<IActionResult> Submit(Guid id, CancellationToken cancellationToken)
+    {
+        var cost = await db.MaterialCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (cost is null) return NotFound();
+
+        if (CostWorkflow.Submit(cost, "material cost") is { } why)
+        {
+            return Problem(title: why, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        audit.Record(cost.TenantId, "materialcost.submitted", "MaterialCost", cost.Id.ToString(), new { cost.Status });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/reject")]
+    [HasPermission(Permissions.CostsApprove)]
+    public async Task<IActionResult> Reject(Guid id, RejectCostRequest request, CancellationToken cancellationToken)
+    {
+        var cost = await db.MaterialCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (cost is null) return NotFound();
+
+        if (CostWorkflow.Reject(cost, request.Reason, "material cost") is { } why)
+        {
+            return Problem(title: why, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        audit.Record(cost.TenantId, "materialcost.rejected", "MaterialCost", cost.Id.ToString(), new { cost.RejectionReason });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    // Ends an approved row right away. The floor price ignores it from then on.
+    [HttpPost("{id:guid}/retire")]
+    [HasPermission(Permissions.CostsApprove)]
+    public async Task<IActionResult> Retire(Guid id, CancellationToken cancellationToken)
+    {
+        var cost = await db.MaterialCosts.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (cost is null) return NotFound();
+
+        if (CostWorkflow.Retire(cost, "material cost") is { } why)
+        {
+            return Problem(title: why, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        audit.Record(cost.TenantId, "materialcost.retired", "MaterialCost", cost.Id.ToString(), new { cost.Status });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }

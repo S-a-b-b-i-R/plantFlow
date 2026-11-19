@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using PlantFlow.Api.Controllers;
+using PlantFlow.Api.Domain.Costing;
 using PlantFlow.Api.Infrastructure;
 using PlantFlow.Api.Services;
 using static PlantFlow.Tests.Integration.TestData;
@@ -12,18 +13,22 @@ namespace PlantFlow.Tests.Integration;
 public class CostingTests(ApiFactory factory)
 {
 
-    private static Task<HttpResponseMessage> MaterialCostAsync(
+    // These create the row, submit it and approve it. A failed create or approval comes back as its own response.
+    private static async Task<HttpResponseMessage> MaterialCostAsync(
         HttpClient client, Guid materialId, decimal cost, string from, Guid? plantId = null) =>
-        client.PostAsJsonAsync("/api/material-costs", new { materialId, plantId, costPerUnit = cost, effectiveFrom = from });
+        await ApproveCostAsync(client, "/api/material-costs",
+            await client.PostAsJsonAsync("/api/material-costs", new { materialId, plantId, costPerUnit = cost, effectiveFrom = from }));
 
-    private static Task<HttpResponseMessage> OverheadAsync(
+    private static async Task<HttpResponseMessage> OverheadAsync(
         HttpClient client, string kind, decimal amount, Guid? plantId = null, string from = "2026-01-01", string? to = null) =>
-        client.PostAsJsonAsync("/api/overhead-costs",
-            new { kind, name = $"{kind} cost", plantId, amountPerCft = amount, validFrom = from, validTo = to });
+        await ApproveCostAsync(client, "/api/overhead-costs",
+            await client.PostAsJsonAsync("/api/overhead-costs",
+                new { kind, name = $"{kind} cost", plantId, amountPerCft = amount, validFrom = from, validTo = to }));
 
-    private static Task<HttpResponseMessage> BandAsync(
+    private static async Task<HttpResponseMessage> BandAsync(
         HttpClient client, decimal fromKm, decimal? toKm, decimal charge, Guid? plantId = null) =>
-        client.PostAsJsonAsync("/api/delivery-charges", new { plantId, fromKm, toKm, chargePerCft = charge });
+        await ApproveCostAsync(client, "/api/delivery-charges",
+            await client.PostAsJsonAsync("/api/delivery-charges", new { plantId, fromKm, toKm, chargePerCft = charge }));
 
     private static async Task<HttpResponseMessage> FloorResponseAsync(
         HttpClient client, Guid productId, Guid plantId, string date, decimal km = 0, Guid? customerId = null)
@@ -213,15 +218,17 @@ public class CostingTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Cost_rows_can_be_corrected_and_removed()
+    public async Task Draft_cost_rows_can_be_corrected_and_removed()
     {
         var admin = (await factory.CreateCompanyAsync()).Admin.Client;
         var cement = await CreateMaterialAsync(admin, "CEM", "Cement", "Kg");
 
-        var first = await MaterialCostAsync(admin, cement, 12m, "2026-01-01");
-        var second = await MaterialCostAsync(admin, cement, 14m, "2026-06-01");
+        // Plain creates, so these stay drafts.
+        var first = await admin.PostAsJsonAsync("/api/material-costs", new { materialId = cement, costPerUnit = 12m, effectiveFrom = "2026-01-01" });
+        var second = await admin.PostAsJsonAsync("/api/material-costs", new { materialId = cement, costPerUnit = 14m, effectiveFrom = "2026-06-01" });
         var firstCost = (await first.Content.ReadFromJsonAsync<MaterialCostDto>(ApiFactory.Json))!;
         var secondCost = (await second.Content.ReadFromJsonAsync<MaterialCostDto>(ApiFactory.Json))!;
+        Assert.Equal(CostStatus.Draft, firstCost.Status);
 
         var fix = await admin.PutAsJsonAsync($"/api/material-costs/{firstCost.Id}", new { costPerUnit = 12.5m, effectiveFrom = "2026-01-01" });
         var clash = await admin.PutAsJsonAsync($"/api/material-costs/{firstCost.Id}", new { costPerUnit = 12.5m, effectiveFrom = "2026-06-01" });
@@ -231,9 +238,10 @@ public class CostingTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.Conflict, clash.StatusCode);
         Assert.Equal(12.5m, fixed12!.CostPerUnit);
 
-        var overhead = await OverheadAsync(admin, "Overhead", 8m);
+        var overhead = await admin.PostAsJsonAsync("/api/overhead-costs",
+            new { kind = "Overhead", name = "Labour", amountPerCft = 8m, validFrom = "2026-01-01" });
         var overheadId = (await overhead.Content.ReadFromJsonAsync<OverheadCostDto>(ApiFactory.Json))!.Id;
-        var band = await BandAsync(admin, 15m, 30m, 2m);
+        var band = await admin.PostAsJsonAsync("/api/delivery-charges", new { fromKm = 15m, toKm = 30m, chargePerCft = 2m });
         var bandId = (await band.Content.ReadFromJsonAsync<DeliveryChargeBandDto>(ApiFactory.Json))!.Id;
 
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/material-costs/{secondCost.Id}")).StatusCode);
