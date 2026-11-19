@@ -5,6 +5,8 @@ export const PERMISSIONS = {
     dashboardsView: "dashboards.view",
     batchesManage: "batches.manage",
     deliveriesTrack: "deliveries.track",
+    deliveriesPlan: "deliveries.plan",
+    deliveriesPlanApprove: "deliveries.plan.approve",
     deliveriesPlanOverride: "deliveries.plan.override",
     returnsManage: "returns.manage",
     returnsQc: "returns.qc",

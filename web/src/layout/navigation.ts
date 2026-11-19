@@ -1,6 +1,7 @@
 import type { IconType } from "react-icons";
 import {
     LuActivity,
+    LuCalendarDays,
     LuClipboardList,
     LuFlaskConical,
     LuTags,
@@ -31,6 +32,14 @@ export const navigation: NavItem[] = [
         label: "Orders",
         icon: LuClipboardList,
         permissions: [PERMISSIONS.ordersView],
+    },
+    {
+        // The pickers read plants, shifts, pumps and drivers, which need master data access.
+        to: "/planning",
+        label: "Planning",
+        icon: LuCalendarDays,
+        permissions: [PERMISSIONS.masterDataView],
+        anyOf: [PERMISSIONS.deliveriesPlan, PERMISSIONS.deliveriesPlanApprove],
     },
     {
         to: "/pricing",
