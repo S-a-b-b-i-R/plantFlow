@@ -32,7 +32,7 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 - **Load size comes from the truck.** A load is the truck's capacity, or the company's default if the truck has none. The last load is only what is left. A smaller load needs a reason.
 - **Going over the planned quantity needs a plant manager** and a written reason.
 - **Pouring cannot start until the pump is ready.** A pumped pour's trucks can arrive early, but they wait.
-- **A pumped pour needs a site survey with an OK result.** Each order either tags one of its site's last three surveys or asks for a new one. A surveyor records the new one from a work queue, for the plants they work for. Planning checks only the order's tagged survey, and the tag cannot change once a pour that relies on it is planned. Which pours need a survey is a company setting.
+- **A pumped pour needs a site survey with an OK result.** Each order either tags one of its site's last three surveys or asks for a new one. A surveyor records the new one from a work queue, for the plants they work for. A plant manager of the order's plant then approves it or sends it back, which returns the order to the queue. Only approved surveys can be tagged by other orders. Planning checks only the order's tagged survey and needs it approved, and the tag cannot change once a pour that relies on it is planned. Which pours need a survey is a company setting.
 - **Billing follows what was poured.** The delivered quantity is what was poured, less what came back, plus any returned concrete dumped through the customer's fault. Accounts resolve differences against the ordered quantity.
 - **Returned concrete is reused carefully.** It can only go into a new load of the same product, at the same plant, in the same shift. Dumped concrete follows the fault: the customer pays for their own, the company absorbs its own.
 - **A rejected load at the plant is always the company's fault.** A rejection at the site needs the arrival recorded and a fault chosen.
@@ -60,6 +60,7 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 | React screens: pricing (recipes, costs, selling prices, approvals)                                   | Done    |
 | Users assigned to the plants they work for, with a Users screen to choose them                       | Done    |
 | Surveys come from orders: tag a recent survey or request one, surveyor work queue                    | Done    |
+| Survey approval by the plant manager: approve or send back, "To approve" tab with a badge            | Done    |
 | React screens: shift planning and administration                                                     | Planned |
 | Quarterly volume targets, customer volume ledger                                                     | Planned |
 
@@ -154,7 +155,7 @@ Open http://localhost:5173 and sign in with Google. In Development, the API move
 | Master data       | `/api/plants`, `/api/customers`, `/api/sites`, `/api/vehicles`, `/api/drivers`, `/api/products`, `/api/materials`   |
 | Pricing and costs | `/api/mix-designs`, `/api/prices`, floor price and margin endpoints                                                 |
 | Orders            | `/api/orders` and the approval, confirmation, hold, close and billing actions                                       |
-| Planning          | `/api/survey-requests`, `/api/orders/{id}/surveys`, `/api/shift-plans`, pump and crew checks                        |
+| Planning          | `/api/survey-requests`, `/api/orders/{id}/surveys`, `/api/survey-approvals`, `/api/shift-plans`, pump and crew checks                        |
 | Production        | `GET /api/shift-plans/{id}/operator`, `POST /api/pours/{id}/loads`, `POST /api/loads/{id}/dispatch`, `.../steps`    |
 | Returns and QC    | `POST /api/loads/{id}/reject`, `.../part-return`, `POST /api/returns/{id}/decide`                                   |
 | Dashboards        | `GET /api/dashboards/live`, `/production`, `/orders`                                                                |

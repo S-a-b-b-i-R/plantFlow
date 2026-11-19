@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using PlantFlow.Api.Data;
 using PlantFlow.Api.Domain.Orders;
+using PlantFlow.Api.Domain.Planning;
 using PlantFlow.Api.Domain.Tenancy;
 
 namespace PlantFlow.Api.Services;
 
-// The survey an order relies on: one of its site's last three surveys, or a request for a new one.
+// The survey an order relies on: one of its site's last three approved surveys, or a request for a new one.
+// The order that asked for a survey keeps it while it waits for approval.
 // Every method that refuses returns a plain-language reason; null means the step is allowed.
 public class OrderSurveys(PlantFlowDbContext db)
 {
@@ -19,7 +21,7 @@ public class OrderSurveys(PlantFlowDbContext db)
     ];
 
     public const string Missing =
-        "This order needs a site survey. Tag one of the site's last three surveys or request a new one.";
+        "This order needs a site survey. Tag one of the site's last three approved surveys or request a new one.";
 
     public const string Locked = "The survey cannot be changed after a pour that relies on it is planned.";
 
@@ -59,12 +61,13 @@ public class OrderSurveys(PlantFlowDbContext db)
 
         if (surveyId is { } id && (changed || existing!.SiteId != siteId))
         {
-            var lastThree = await db.SiteSurveys.AsNoTracking().Where(s => s.SiteId == siteId)
+            var lastThree = await db.SiteSurveys.AsNoTracking()
+                .Where(s => s.SiteId == siteId && s.Status == SurveyStatus.Approved)
                 .OrderByDescending(s => s.SurveyedOn).ThenByDescending(s => s.CreatedAtUtc)
                 .Take(TaggableCount).Select(s => s.Id).ToListAsync(cancellationToken);
             if (!lastThree.Contains(id))
             {
-                return "Tag one of this site's last three surveys.";
+                return "Tag one of this site's last three approved surveys.";
             }
         }
 

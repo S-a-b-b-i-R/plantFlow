@@ -16,13 +16,28 @@ public record SiteSurveyDto(
     Guid Id, Guid SiteId, string SiteName, DateOnly SurveyedOn, SurveyResult Result, string? Notes,
     Guid? SurveyedBy, DateTime CreatedAtUtc, decimal? Latitude, decimal? Longitude, decimal? AccuracyMeters,
     decimal? PipingMetres, string? PumpPosition, string? TruckConnectionPoint, string? LocationNote,
-    List<SurveyImageDto> Images, Guid? OrderId, string? OrderNumber);
+    List<SurveyImageDto> Images, Guid? OrderId, string? OrderNumber,
+    SurveyStatus Status, Guid? ReviewedBy, DateTime? ReviewedAtUtc, string? ReviewComment);
 
 // An order waiting for a new survey, as the surveyor sees it in the work queue.
 public record SurveyRequestDto(
     Guid OrderId, string OrderNumber, OrderStatus OrderStatus, string CustomerName, Guid SiteId, string SiteName,
     string? SiteAddress, decimal? SiteLatitude, decimal? SiteLongitude, string? SiteAccessNotes,
-    Guid PlantId, string PlantCode, DateOnly RequestedDate, DateTime? SurveyRequestedAtUtc, bool HasPumpLines);
+    Guid PlantId, string PlantCode, DateOnly RequestedDate, DateTime? SurveyRequestedAtUtc, bool HasPumpLines,
+    string? SentBackReason);
+
+// A survey waiting for a plant manager, with the order it was recorded for.
+public record SurveyApprovalDto(
+    SiteSurveyDto Survey, string CustomerName, Guid PlantId, string PlantCode, DateOnly RequestedDate);
+
+// ApprovesForAnyPlant is false for an approver with no plants assigned, so the screen can say why the list is empty.
+public record SurveyApprovalsDto(bool ApprovesForAnyPlant, List<SurveyApprovalDto> Surveys);
+
+public class SendBackSurveyRequest
+{
+    [Required, StringLength(500, MinimumLength = 3)]
+    public string? Reason { get; init; }
+}
 
 public class SiteSurveyRequest
 {
@@ -99,6 +114,7 @@ public class SiteSurveysController(
     }
 
     // Records the survey an order asked for. It is linked to the order and becomes the order's tagged survey.
+    // It waits for a plant manager's approval before planning can rely on it.
     [HttpPost("api/orders/{orderId:guid}/surveys")]
     [HasPermission(Permissions.SiteSurveysPerform)]
     public async Task<ActionResult<SiteSurveyDto>> Create(Guid orderId, SiteSurveyRequest request, CancellationToken cancellationToken)
@@ -172,6 +188,107 @@ public class SiteSurveysController(
 
         var dto = (await LoadAsync(db.SiteSurveys.AsNoTracking().Where(s => s.Id == survey.Id), null, cancellationToken)).Single();
         return Created($"api/sites/{siteId}/surveys", dto);
+    }
+
+    // Surveys waiting for approval at the plants the user approves for, oldest first.
+    [HttpGet("api/survey-approvals")]
+    [HasPermission(Permissions.SiteSurveysApprove)]
+    public async Task<ActionResult<SurveyApprovalsDto>> Approvals(CancellationToken cancellationToken)
+    {
+        var plants = await plantScope.ApprovesForAsync(currentUser.UserId, cancellationToken);
+        if (plants is { Count: 0 }) return new SurveyApprovalsDto(false, []);
+
+        var pending = db.SiteSurveys.AsNoTracking()
+            .Where(s => s.Status == SurveyStatus.Pending && s.Order != null)
+            .Where(s => plants == null || plants.Contains(s.Order!.PlantId));
+
+        var orders = await pending.Select(s => new
+        {
+            s.Id,
+            CustomerName = s.Order!.Customer.Name,
+            s.Order.PlantId,
+            PlantCode = s.Order.Plant.Code,
+            s.Order.RequestedDate
+        }).ToListAsync(cancellationToken);
+        var surveys = await LoadAsync(pending, null, cancellationToken);
+
+        var items = surveys.OrderBy(s => s.CreatedAtUtc).Select(s =>
+        {
+            var o = orders.Single(x => x.Id == s.Id);
+            return new SurveyApprovalDto(s, o.CustomerName, o.PlantId, o.PlantCode, o.RequestedDate);
+        }).ToList();
+        return new SurveyApprovalsDto(true, items);
+    }
+
+    // Approves a survey for planning. The plant manager may approve a survey they recorded themselves.
+    [HttpPost("api/surveys/{id:guid}/approve")]
+    [HasPermission(Permissions.SiteSurveysApprove)]
+    public async Task<ActionResult<SiteSurveyDto>> Approve(Guid id, CancellationToken cancellationToken)
+    {
+        var (survey, problem) = await ReviewableAsync(id, cancellationToken);
+        if (problem is not null) return problem;
+
+        survey!.Status = SurveyStatus.Approved;
+        survey.ReviewedBy = currentUser.UserId;
+        survey.ReviewedAtUtc = DateTime.UtcNow;
+
+        audit.Record(survey.TenantId, "sitesurvey.approved", "SiteSurvey", survey.Id.ToString(),
+            new { survey.OrderId, Result = survey.Result.ToString() });
+        await db.SaveChangesAsync(cancellationToken);
+
+        return (await LoadAsync(db.SiteSurveys.AsNoTracking().Where(s => s.Id == id), null, cancellationToken)).Single();
+    }
+
+    // Sends a survey back. It stays as history, and the order that asked for it returns to the surveyor work queue
+    // with the reason, so a new survey replaces it.
+    [HttpPost("api/surveys/{id:guid}/send-back")]
+    [HasPermission(Permissions.SiteSurveysApprove)]
+    public async Task<ActionResult<SiteSurveyDto>> SendBack(Guid id, SendBackSurveyRequest request, CancellationToken cancellationToken)
+    {
+        var (survey, problem) = await ReviewableAsync(id, cancellationToken);
+        if (problem is not null) return problem;
+
+        survey!.Status = SurveyStatus.Rejected;
+        survey.ReviewedBy = currentUser.UserId;
+        survey.ReviewedAtUtc = DateTime.UtcNow;
+        survey.ReviewComment = request.Reason!.Trim();
+
+        var order = await db.Orders.FirstAsync(o => o.Id == survey.OrderId, cancellationToken);
+        var reopened = order.SiteSurveyId == survey.Id && OrderSurveys.OpenStatuses.Contains(order.Status);
+        if (reopened)
+        {
+            OrderSurveys.Apply(order, null, requestNew: true, currentUser.UserId);
+        }
+
+        audit.Record(survey.TenantId, "sitesurvey.sent_back", "SiteSurvey", survey.Id.ToString(),
+            new { survey.OrderId, Reason = survey.ReviewComment, RequestReopened = reopened });
+        await db.SaveChangesAsync(cancellationToken);
+
+        return (await LoadAsync(db.SiteSurveys.AsNoTracking().Where(s => s.Id == id), null, cancellationToken)).Single();
+    }
+
+    // A survey can be reviewed once, by an approver of its order's plant.
+    private async Task<(SiteSurvey? Survey, ObjectResult? Problem)> ReviewableAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var survey = await db.SiteSurveys.Include(s => s.Order).FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+        if (survey is null)
+        {
+            return (null, Problem(title: "This survey was not found.", statusCode: StatusCodes.Status404NotFound));
+        }
+
+        if (survey.Status != SurveyStatus.Pending || survey.Order is null)
+        {
+            return (null, Problem(title: "This survey was already reviewed.", statusCode: StatusCodes.Status409Conflict));
+        }
+
+        var plants = await plantScope.ApprovesForAsync(currentUser.UserId, cancellationToken);
+        if (plants is not null && !plants.Contains(survey.Order.PlantId))
+        {
+            return (null, Problem(title: "You do not approve surveys for this order's plant.",
+                statusCode: StatusCodes.Status403Forbidden));
+        }
+
+        return (survey, null);
     }
 
     // Up to three photos per survey: JPEG, PNG or WebP, at most 5 MB each. Send it as form data with a "file" part.
@@ -275,7 +392,10 @@ public class SiteSurveysController(
                 o.Id, o.Number, o.Status, o.Customer.Name, o.SiteId, o.Site.Name,
                 o.Site.Address, o.Site.Latitude, o.Site.Longitude, o.Site.AccessNotes,
                 o.PlantId, o.Plant.Code, o.RequestedDate, o.SurveyRequestedAtUtc,
-                o.Lines.Any(l => l.PourMethod == PourMethod.Pump)));
+                o.Lines.Any(l => l.PourMethod == PourMethod.Pump),
+                // Why the last survey for this order was sent back, if it was.
+                db.SiteSurveys.Where(s => s.OrderId == o.Id && s.Status == SurveyStatus.Rejected)
+                    .OrderByDescending(s => s.ReviewedAtUtc).Select(s => s.ReviewComment).FirstOrDefault()));
 
     // Newest first. The photos come back as details only. Each one is fetched on its own.
     private async Task<List<SiteSurveyDto>> LoadAsync(IQueryable<SiteSurvey> query, int? take, CancellationToken cancellationToken)
@@ -301,7 +421,11 @@ public class SiteSurveysController(
             s.TruckConnectionPoint,
             s.LocationNote,
             s.OrderId,
-            OrderNumber = s.Order != null ? s.Order.Number : null
+            OrderNumber = s.Order != null ? s.Order.Number : null,
+            s.Status,
+            s.ReviewedBy,
+            s.ReviewedAtUtc,
+            s.ReviewComment
         }).ToListAsync(cancellationToken);
 
         var ids = rows.Select(r => r.Id).ToList();
@@ -315,6 +439,6 @@ public class SiteSurveysController(
             r.Latitude, r.Longitude, r.AccuracyMeters, r.PipingMetres, r.PumpPosition, r.TruckConnectionPoint, r.LocationNote,
             images.Where(i => i.SurveyId == r.Id)
                 .Select(i => new SurveyImageDto(i.Id, i.FileName, i.ContentType, i.SizeBytes, i.Caption)).ToList(),
-            r.OrderId, r.OrderNumber)).ToList();
+            r.OrderId, r.OrderNumber, r.Status, r.ReviewedBy, r.ReviewedAtUtc, r.ReviewComment)).ToList();
     }
 }

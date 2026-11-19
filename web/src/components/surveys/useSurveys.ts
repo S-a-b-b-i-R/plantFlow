@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiBlob } from "@/lib/api";
-import type { Site, SiteSurvey, SurveyRequest } from "@/lib/surveys";
+import type {
+    Site,
+    SiteSurvey,
+    SurveyApprovals,
+    SurveyRequest,
+} from "@/lib/surveys";
 
 // The surveyor work queue: open orders waiting for a new survey, soonest pour first.
 export const useSurveyRequests = (enabled = true) =>
@@ -10,6 +15,41 @@ export const useSurveyRequests = (enabled = true) =>
         enabled,
         refetchInterval: 60_000,
     });
+
+// Surveys waiting for approval at the plants the user approves for. Also feeds the badge in the menu.
+export const useSurveyApprovals = (enabled = true) =>
+    useQuery({
+        queryKey: ["surveys", "approvals"],
+        queryFn: () => api<SurveyApprovals>("/api/survey-approvals"),
+        enabled,
+        refetchInterval: 60_000,
+    });
+
+// Approves a survey, or sends it back with a reason (which reopens the order's request).
+export function useReviewSurvey() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({
+            surveyId,
+            reason,
+        }: {
+            surveyId: string;
+            reason?: string;
+        }) =>
+            reason === undefined
+                ? api<SiteSurvey>(`/api/surveys/${surveyId}/approve`, {
+                      method: "POST",
+                  })
+                : api<SiteSurvey>(`/api/surveys/${surveyId}/send-back`, {
+                      method: "POST",
+                      body: JSON.stringify({ reason }),
+                  }),
+        onSettled: () => {
+            void queryClient.invalidateQueries({ queryKey: ["surveys"] });
+            void queryClient.invalidateQueries({ queryKey: ["orders"] });
+        },
+    });
+}
 
 export const useSurveyRequest = (orderId: string) =>
     useQuery({

@@ -1,14 +1,15 @@
 import { useSiteSurveys } from "@/components/surveys/useSurveys";
 import { shortDate } from "@/lib/orders";
-import { resultLabel, TAGGABLE_SURVEYS } from "@/lib/surveys";
+import { resultLabel, statusLabel, TAGGABLE_SURVEYS } from "@/lib/surveys";
 import { inputClass } from "./styles";
 
 export type SurveyPick = { surveyId: string; requestSurvey: boolean };
 
 const NEW = "new";
 
-// Picks the survey an order relies on: one of its site's last three, or a request for a new one.
-// The current tag stays listed even when it is no longer among the last three, so it is not lost by accident.
+// Picks the survey an order relies on: one of its site's last three approved surveys, or a request for a new one.
+// The current tag stays listed even when it is not among them (older, or still waiting for approval),
+// so it is not lost by accident.
 export function SurveyChoice({
     siteId,
     value,
@@ -24,7 +25,9 @@ export function SurveyChoice({
 }) {
     const surveys = useSiteSurveys(siteId);
     const all = surveys.data ?? [];
-    const recent = all.slice(0, TAGGABLE_SURVEYS);
+    const recent = all
+        .filter((s) => s.status === "Approved")
+        .slice(0, TAGGABLE_SURVEYS);
     const current =
         value.surveyId && !recent.some((s) => s.id === value.surveyId)
             ? all.find((s) => s.id === value.surveyId)
@@ -61,7 +64,11 @@ export function SurveyChoice({
                 {current && (
                     <option value={current.id}>
                         {shortDate(current.surveyedOn)},{" "}
-                        {resultLabel[current.result]} (older, current)
+                        {resultLabel[current.result]} (
+                        {current.status === "Approved"
+                            ? "older"
+                            : statusLabel[current.status].toLowerCase()}
+                        , current)
                     </option>
                 )}
             </select>

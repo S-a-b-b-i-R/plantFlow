@@ -59,6 +59,12 @@ export function SurveyPanel({ order }: { order: OrderSummary }) {
                                     {tagged.orderNumber &&
                                         tagged.orderNumber !== order.number &&
                                         ` for ${tagged.orderNumber}`}
+                                    {tagged.status === "Pending" && (
+                                        <span className="block font-semibold">
+                                            Waiting for the plant manager's
+                                            approval. Planning waits for it.
+                                        </span>
+                                    )}
                                 </>
                             ) : (
                                 "A survey is tagged."

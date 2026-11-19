@@ -158,13 +158,18 @@ public static class TestData
     public static Task<HttpResponseMessage> TagSurveyAsync(HttpClient client, Guid orderId, Guid? surveyId) =>
         client.PutAsJsonAsync($"/api/orders/{orderId}/survey", new { surveyId });
 
-    // Records the survey an order asked for. The order must have an open request.
+    // Records the survey an order asked for, and approves it unless told not to. The order must have an open request.
     public static async Task<SiteSurveyDto> RecordSurveyAsync(
-        HttpClient client, Guid orderId, string result = "Ok", string date = "2026-05-30")
+        HttpClient client, Guid orderId, string result = "Ok", string date = "2026-05-30", bool approve = true)
     {
         var response = await client.PostAsJsonAsync($"/api/orders/{orderId}/surveys", SurveyBody(result, date));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<SiteSurveyDto>(ApiFactory.Json))!;
+        var survey = (await response.Content.ReadFromJsonAsync<SiteSurveyDto>(ApiFactory.Json))!;
+        if (!approve) return survey;
+
+        var approved = await client.PostAsync($"/api/surveys/{survey.Id}/approve", null);
+        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+        return (await approved.Content.ReadFromJsonAsync<SiteSurveyDto>(ApiFactory.Json))!;
     }
 
     public static async Task<OrderDetailDto> CreateDraftAsync(HttpClient client, OrderWorld w, object[] lines)
