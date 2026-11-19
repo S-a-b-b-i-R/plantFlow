@@ -7,6 +7,7 @@ import {
     LuMapPinned,
     LuTags,
     LuTruck,
+    LuUsers,
 } from "react-icons/lu";
 import { can, PERMISSIONS } from "@/auth/permissions";
 import type { Me } from "@/lib/types";
@@ -72,6 +73,13 @@ export const navigation: NavItem[] = [
         label: "Quality",
         icon: LuFlaskConical,
         permissions: [PERMISSIONS.returnsQc],
+    },
+    {
+        // Assigning plants reads the plant list, which is master data.
+        to: "/users",
+        label: "Users",
+        icon: LuUsers,
+        permissions: [PERMISSIONS.usersManage, PERMISSIONS.masterDataView],
     },
 ];
 

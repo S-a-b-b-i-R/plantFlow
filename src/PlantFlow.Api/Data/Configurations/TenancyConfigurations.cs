@@ -78,6 +78,20 @@ public class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
     }
 }
 
+public class UserPlantConfiguration : IEntityTypeConfiguration<UserPlant>
+{
+    public void Configure(EntityTypeBuilder<UserPlant> b)
+    {
+        b.HasKey(x => new { x.UserId, x.PlantId });
+        b.HasIndex(x => x.TenantId);
+        b.HasIndex(x => x.PlantId);
+        b.HasOne(x => x.User).WithMany(u => u.UserPlants).HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.Plant).WithMany().HasForeignKey(x => x.PlantId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public class UserPermissionConfiguration : IEntityTypeConfiguration<UserPermission>
 {
     public void Configure(EntityTypeBuilder<UserPermission> b)

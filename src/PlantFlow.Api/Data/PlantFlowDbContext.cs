@@ -34,6 +34,7 @@ public class PlantFlowDbContext : DbContext
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
+    public DbSet<UserPlant> UserPlants => Set<UserPlant>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Plant> Plants => Set<Plant>();
     public DbSet<BatchingPlant> BatchingPlants => Set<BatchingPlant>();

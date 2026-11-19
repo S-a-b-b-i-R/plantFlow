@@ -14,6 +14,7 @@ import { SurveyForm } from "@/pages/SurveyForm";
 import { Surveys } from "@/pages/Surveys";
 import { Pricing } from "@/pages/Pricing";
 import { Quality } from "@/pages/Quality";
+import { Users } from "@/pages/Users";
 
 export default function App() {
     return (
@@ -38,6 +39,7 @@ export default function App() {
                         />
                         <Route path="operator" element={<Operator />} />
                         <Route path="quality" element={<Quality />} />
+                        <Route path="users" element={<Users />} />
                     </Route>
                     <Route
                         path="*"

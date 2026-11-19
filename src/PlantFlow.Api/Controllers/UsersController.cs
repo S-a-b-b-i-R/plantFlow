@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PlantFlow.Api.Data;
 using PlantFlow.Api.Domain.Identity;
+using PlantFlow.Api.Domain.MasterData;
 using PlantFlow.Api.Domain.Security;
 using PlantFlow.Api.Infrastructure;
 using PlantFlow.Api.Services;
@@ -10,17 +11,24 @@ namespace PlantFlow.Api.Controllers;
 
 public record UserDto(
     Guid Id, string Email, string? DisplayName, UserStatus Status, bool IsPlatformAdmin,
-    List<string> Roles, DateTime? ApprovedAtUtc);
+    List<string> Roles, DateTime? ApprovedAtUtc, List<UserPlantDto> Plants);
+
+public record UserPlantDto(Guid Id, string Code, string Name);
 
 public record PermissionOverrideDto(string PermissionKey, bool IsGranted);
 
 public record UserDetailDto(
     Guid Id, string Email, string? DisplayName, UserStatus Status,
-    List<Guid> RoleIds, List<PermissionOverrideDto> PermissionOverrides);
+    List<Guid> RoleIds, List<PermissionOverrideDto> PermissionOverrides, List<Guid> PlantIds);
 
 public class SetRolesRequest
 {
     public List<Guid> RoleIds { get; init; } = [];
+}
+
+public class SetPlantsRequest
+{
+    public List<Guid> PlantIds { get; init; } = [];
 }
 
 public class SetPermissionOverridesRequest
@@ -46,7 +54,9 @@ public class UsersController(
             .Select(u => new UserDto(
                 u.Id, u.Email, u.DisplayName, u.Status, u.IsPlatformAdmin,
                 u.UserRoles.Select(ur => ur.Role.Name).OrderBy(n => n).ToList(),
-                u.ApprovedAtUtc))
+                u.ApprovedAtUtc,
+                u.UserPlants.OrderBy(up => up.Plant.Code)
+                    .Select(up => new UserPlantDto(up.PlantId, up.Plant.Code, up.Plant.Name)).ToList()))
             .ToListAsync(cancellationToken);
     }
 
@@ -58,7 +68,8 @@ public class UsersController(
             .Select(u => new UserDetailDto(
                 u.Id, u.Email, u.DisplayName, u.Status,
                 u.UserRoles.Select(ur => ur.RoleId).ToList(),
-                u.Permissions.Select(p => new PermissionOverrideDto(p.PermissionKey, p.IsGranted)).ToList()))
+                u.Permissions.Select(p => new PermissionOverrideDto(p.PermissionKey, p.IsGranted)).ToList(),
+                u.UserPlants.Select(up => up.PlantId).ToList()))
             .FirstOrDefaultAsync(cancellationToken);
 
         if (user is null) return NotFound();
@@ -107,6 +118,45 @@ public class UsersController(
         await db.SaveChangesAsync(cancellationToken);
 
         permissionService.Invalidate(user.Id, user.TenantId);
+        return NoContent();
+    }
+
+    // Replaces the plants the user works for with exactly this set.
+    [HttpPut("{id:guid}/plants")]
+    public async Task<IActionResult> SetPlants(Guid id, SetPlantsRequest request, CancellationToken cancellationToken)
+    {
+        if (id == currentUser.UserId) return CannotChangeSelf();
+
+        var user = await db.Users.Include(u => u.UserPlants).FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+        if (user is null) return NotFound();
+
+        var wanted = request.PlantIds.Distinct().ToList();
+        var plants = await db.Plants.AsNoTracking()
+            .Where(p => wanted.Contains(p.Id))
+            .Select(p => new { p.Id, p.Status })
+            .ToListAsync(cancellationToken);
+        if (plants.Count != wanted.Count)
+        {
+            return Problem(title: "One or more plants do not exist in this company.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        // A plant that was deactivated can stay on the user, but cannot be newly given.
+        var current = user.UserPlants.Select(up => up.PlantId).ToHashSet();
+        if (plants.Any(p => p.Status != ActiveStatus.Active && !current.Contains(p.Id)))
+        {
+            return Problem(
+                title: "An inactive plant cannot be assigned. Reactivate the plant first.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        db.UserPlants.RemoveRange(user.UserPlants.Where(up => !wanted.Contains(up.PlantId)));
+        foreach (var plantId in wanted.Where(p => !current.Contains(p)))
+        {
+            db.UserPlants.Add(new UserPlant { TenantId = user.TenantId, UserId = user.Id, PlantId = plantId });
+        }
+
+        audit.Record(user.TenantId, "user.plants_changed", "User", user.Id.ToString(), new { PlantIds = wanted });
+        await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
 
