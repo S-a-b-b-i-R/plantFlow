@@ -6,6 +6,10 @@ namespace PlantFlow.Api.Domain.Security;
 public static class DefaultRoles
 {
     public const string AdminRoleName = "Admin";
+    public const string AdminKey = "admin";
+
+    // A built-in role's fixed identity: "Sales Representative" is "sales-representative".
+    public static string KeyFor(string name) => name.ToLowerInvariant().Replace(' ', '-');
     public static readonly IReadOnlyDictionary<string, string[]> All = new Dictionary<string, string[]>
     {
         [AdminRoleName] = Permissions.All.ToArray(),

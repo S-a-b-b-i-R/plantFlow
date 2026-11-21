@@ -339,6 +339,10 @@ namespace PlantFlow.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("SystemKey")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
@@ -352,6 +356,10 @@ namespace PlantFlow.Api.Migrations
 
                     b.HasIndex("TenantId", "Name")
                         .IsUnique();
+
+                    b.HasIndex("TenantId", "SystemKey")
+                        .IsUnique()
+                        .HasFilter("[SystemKey] IS NOT NULL");
 
                     b.ToTable("Roles");
                 });

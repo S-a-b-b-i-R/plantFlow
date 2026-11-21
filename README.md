@@ -47,6 +47,7 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 | Google sign-in with Firebase, API validates Firebase ID tokens                                       | Done    |
 | New users start `Pending`; a platform admin assigns them to a company, a company admin approves them | Done    |
 | Roles and permissions: 11 default roles, 48 permission keys, per-user grants and denies              | Done    |
+| Administration screens: users (approve, disable with a reason, roles, plants, grants and denies) and roles (edit, rename, custom roles; Admin locked) | Done    |
 | Audit log for user, role, permission, order, production and returns changes                          | Done    |
 | Master data: plants and shifts, customers and sites, vehicles and drivers, products, materials       | Done    |
 | Mix designs with approval, material and overhead costs, price master, floor price and margin         | Done    |
@@ -91,7 +92,8 @@ Decisions worth knowing about:
 - **Tenant isolation is enforced in one place.** Every tenant-owned entity implements `ITenantOwned`, and a global query filter limits every query to the signed-in user's company. A user with no company sees nothing, and another company's ids return 404. Controllers don't repeat tenant checks.
 - **The API is the source of truth for access.** Roles and permissions are loaded from the database on each request through a claims transformation, cached for 60 seconds and cleared the moment an admin changes anything. A disabled user loses access immediately. The web app only hides what the API would refuse anyway.
 - **Deny beats grant.** Effective permissions are the role's permissions, plus the user's own grants, minus the user's explicit denies.
-- **Admins can't lock themselves out.** Changes to your own status, roles or permissions are rejected.
+- **Admins can't lock themselves out.** Changes to your own status, roles or permissions are rejected, the company always keeps one active Admin, and the Admin role always has every permission and can't be edited.
+- **Built-in roles keep a fixed key.** Companies can rename them, and new permissions still reach them by key.
 - **Billing logic lives in one service.** `DeliveredQuantity` is the single place that turns loads and returns into a billed quantity, so a change to the rules cannot leave two code paths disagreeing.
 - **Times are stored in UTC and shown in plant time.** Shifts and pours are planned in the plant's local time, and each company sets its offset.
 - **Volume is stored in CFT.** Display units are a tenant setting, never a storage format.

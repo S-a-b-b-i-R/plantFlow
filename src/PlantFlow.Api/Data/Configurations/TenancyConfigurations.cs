@@ -48,6 +48,8 @@ public class RoleConfiguration : IEntityTypeConfiguration<Role>
         b.HasKey(x => x.Id);
         b.Property(x => x.Name).HasMaxLength(100);
         b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
+        b.Property(x => x.SystemKey).HasMaxLength(50);
+        b.HasIndex(x => new { x.TenantId, x.SystemKey }).IsUnique().HasFilter("[SystemKey] IS NOT NULL");
         b.HasOne(x => x.Tenant).WithMany().HasForeignKey(x => x.TenantId)
             .OnDelete(DeleteBehavior.Restrict);
     }

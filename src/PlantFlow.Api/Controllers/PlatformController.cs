@@ -131,7 +131,7 @@ public class PlatformController(
         if (request.AsAdmin)
         {
             var adminRole = await db.Roles.IgnoreQueryFilters().FirstOrDefaultAsync(
-                r => r.TenantId == tenant.Id && r.Name == DefaultRoles.AdminRoleName, cancellationToken);
+                r => r.TenantId == tenant.Id && r.SystemKey == DefaultRoles.AdminKey, cancellationToken);
 
             if (adminRole is null)
             {

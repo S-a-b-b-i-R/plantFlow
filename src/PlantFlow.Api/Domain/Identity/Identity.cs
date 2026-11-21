@@ -29,6 +29,9 @@ public class Role : AuditableEntity, ITenantOwned
     public Guid TenantId { get; set; }
     public Tenant Tenant { get; set; } = null!;
     public required string Name { get; set; }
+    // Set on PlantFlow's built-in roles ("planner", "admin"...) and null on a company's own roles.
+    // It survives a rename, so updates can still find the role (for example to add a new permission).
+    public string? SystemKey { get; set; }
     public List<RolePermission> Permissions { get; set; } = [];
     public List<UserRole> UserRoles { get; set; } = [];
 }

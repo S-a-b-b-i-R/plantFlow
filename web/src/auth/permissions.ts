@@ -40,6 +40,7 @@ export const PERMISSIONS = {
     ordersClose: "orders.close",
     ordersBillingResolve: "orders.billing.resolve",
     usersManage: "users.manage",
+    rolesManage: "roles.manage",
     settingsManage: "settings.manage",
 };
 
