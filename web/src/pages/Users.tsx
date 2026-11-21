@@ -1,36 +1,96 @@
 import { useState } from "react";
-import { LuCheck } from "react-icons/lu";
+import { LuChevronDown, LuSearch } from "react-icons/lu";
 import { useMe } from "@/auth/useMe";
-import { OpButton as Button } from "@/components/operator/OpButton";
-import { nextButtonClass, panelClass } from "@/components/orders/styles";
 import {
-    useActivePlants,
-    useSetUserPlants,
-    useUsers,
-} from "@/components/users/useUsers";
+    inputClass,
+    panelClass,
+    tabClass,
+    tabRowClass,
+} from "@/components/orders/styles";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { PlantOption } from "@/lib/orders";
-import type { UserSummary } from "@/lib/users";
+import { UserPanel } from "@/components/users/UserPanel";
+import { useUsers } from "@/components/users/useUsers";
+import { initialsOf } from "@/lib/format";
+import type { UserStatus } from "@/lib/types";
+import { statusLabel, type UserSummary } from "@/lib/users";
 import { cn } from "@/lib/utils";
 
-// Users and the plants they work for. Plant-scoped decisions, such as approving a
-// site survey, are limited to these plants. The full user administration comes later.
+const tabs: { status: UserStatus; label: string }[] = [
+    { status: "Pending", label: "Waiting" },
+    { status: "Active", label: "Active" },
+    { status: "Disabled", label: "Disabled" },
+    { status: "Rejected", label: "Rejected" },
+];
+
+// Everyone in the company: approve sign-ups, give roles and plants, adjust single permissions,
+// and disable people who leave.
 export function Users() {
     const me = useMe().data!;
     const users = useUsers();
-    const plants = useActivePlants();
-    const [editing, setEditing] = useState<string | null>(null);
-    const [savedFor, setSavedFor] = useState<string | null>(null);
+    const [chosenTab, setChosenTab] = useState<UserStatus | null>(null);
+    const [search, setSearch] = useState("");
+    const [open, setOpen] = useState<string | null>(null);
+
+    const all = users.data ?? [];
+    const count = (status: UserStatus) =>
+        all.filter((u) => u.status === status).length;
+    // Until someone picks a tab, open on the waiting sign-ups when there are any.
+    const tab = chosenTab ?? (count("Pending") > 0 ? "Pending" : "Active");
+    const needle = search.trim().toLowerCase();
+    const shown = all.filter(
+        (u) =>
+            u.status === tab &&
+            (!needle ||
+                u.email.toLowerCase().includes(needle) ||
+                (u.displayName ?? "").toLowerCase().includes(needle)),
+    );
 
     return (
         <div className="space-y-5">
             <header>
                 <h1 className="display text-4xl leading-none">Users</h1>
                 <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                    Choose the plants each person works for. A plant manager can
-                    only approve site surveys for their own plants.
+                    Approve people who sign up, give them roles and plants, and
+                    disable accounts when someone leaves. The company always
+                    keeps at least one active Admin.
                 </p>
             </header>
+
+            <div role="tablist" aria-label="Users" className={tabRowClass}>
+                {tabs.map((t) => (
+                    <button
+                        key={t.status}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab === t.status}
+                        onClick={() => {
+                            setChosenTab(t.status);
+                            setOpen(null);
+                        }}
+                        className={tabClass(tab === t.status)}
+                    >
+                        {t.label}
+                        <span className="tabular-nums opacity-70">
+                            {count(t.status)}
+                        </span>
+                    </button>
+                ))}
+            </div>
+
+            <label className="relative block sm:max-w-md">
+                <LuSearch
+                    aria-hidden
+                    className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                />
+                <input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search name or email"
+                    aria-label="Search users"
+                    className={cn(inputClass, "h-11 pl-9")}
+                />
+            </label>
 
             {users.isLoading && <Skeleton className="h-40 w-full" />}
             {users.isError && (
@@ -38,74 +98,30 @@ export function Users() {
                     {users.error.message}
                 </p>
             )}
-            {plants.isError && (
-                <p role="alert" className="text-sm text-late">
-                    {plants.error.message}
-                </p>
-            )}
-            {users.data && users.data.length === 0 && (
+            {users.data && shown.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                    No users in this company yet.
+                    {needle
+                        ? "Nobody here matches that search."
+                        : tab === "Pending"
+                          ? "Nobody is waiting for approval."
+                          : `No ${statusLabel[tab].toLowerCase()} users.`}
                 </p>
             )}
 
-            {users.data && users.data.length > 0 && (
+            {shown.length > 0 && (
                 <ul className={cn(panelClass, "divide-y")}>
-                    {users.data.map((user) => (
-                        <li key={user.id} className="space-y-3 px-4 py-3">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <span className="block truncate font-medium">
-                                        {user.displayName ?? user.email}
-                                    </span>
-                                    {user.displayName && (
-                                        <span className="block truncate text-sm text-muted-foreground">
-                                            {user.email}
-                                        </span>
-                                    )}
-                                    <span className="mt-1 block text-xs text-muted-foreground">
-                                        {user.status}
-                                        {user.roles.length > 0 &&
-                                            ` · ${user.roles.join(", ")}`}
-                                    </span>
-                                </div>
-                                {user.id === me.id ? (
-                                    <span className="text-xs text-muted-foreground">
-                                        You cannot change your own account.
-                                    </span>
-                                ) : (
-                                    editing !== user.id && (
-                                        <Button
-                                            variant="outline"
-                                            className="h-11"
-                                            onClick={() => {
-                                                setSavedFor(null);
-                                                setEditing(user.id);
-                                            }}
-                                        >
-                                            Change plants
-                                        </Button>
-                                    )
-                                )}
-                            </div>
-
-                            {editing === user.id ? (
-                                <PlantPicker
-                                    user={user}
-                                    plants={plants.data?.items ?? []}
-                                    loading={plants.isLoading}
-                                    onDone={(saved) => {
-                                        setEditing(null);
-                                        if (saved) setSavedFor(user.id);
-                                    }}
-                                />
-                            ) : (
-                                <PlantChips
-                                    user={user}
-                                    saved={savedFor === user.id}
-                                />
-                            )}
-                        </li>
+                    {shown.map((user) => (
+                        <UserRow
+                            key={user.id}
+                            user={user}
+                            isMe={user.id === me.id}
+                            open={open === user.id}
+                            onToggle={() =>
+                                setOpen((now) =>
+                                    now === user.id ? null : user.id,
+                                )
+                            }
+                        />
                     ))}
                 </ul>
             )}
@@ -113,127 +129,89 @@ export function Users() {
     );
 }
 
-function PlantChips({ user, saved }: { user: UserSummary; saved: boolean }) {
-    return (
-        <div className="flex flex-wrap items-center gap-2">
-            {user.plants.length === 0 ? (
-                <span className="text-sm text-muted-foreground">No plants</span>
-            ) : (
-                user.plants.map((plant) => (
-                    <span
-                        key={plant.id}
-                        className="inline-flex items-center rounded-sm border px-2 py-0.5 text-xs font-semibold"
-                        title={plant.name}
-                    >
-                        {plant.code}
-                    </span>
-                ))
-            )}
-            {saved && (
-                <span className="inline-flex items-center gap-1 text-xs text-ok">
-                    <LuCheck aria-hidden className="size-3.5" /> Saved
-                </span>
-            )}
-        </div>
-    );
-}
-
-// Mounted fresh each time it opens, so its selection starts from the user's current plants.
-function PlantPicker({
+function UserRow({
     user,
-    plants,
-    loading,
-    onDone,
+    isMe,
+    open,
+    onToggle,
 }: {
     user: UserSummary;
-    plants: PlantOption[];
-    loading: boolean;
-    onDone: (saved: boolean) => void;
+    isMe: boolean;
+    open: boolean;
+    onToggle: () => void;
 }) {
-    const [selected, setSelected] = useState(
-        () => new Set(user.plants.map((plant) => plant.id)),
-    );
-    const save = useSetUserPlants();
-
-    // Active plants, plus any assigned plant that has since been deactivated so it can be removed.
-    const activeIds = new Set(plants.map((plant) => plant.id));
-    const options = [
-        ...plants.map((plant) => ({ ...plant, inactive: false })),
-        ...user.plants
-            .filter((plant) => !activeIds.has(plant.id))
-            .map((plant) => ({ ...plant, inactive: true })),
-    ];
-
-    const toggle = (id: string) =>
-        setSelected((current) => {
-            const next = new Set(current);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
+    const name = user.displayName ?? user.email;
+    const panelId = `user-${user.id}`;
 
     return (
-        <div className="space-y-3">
-            {loading && <Skeleton className="h-24 w-full" />}
-            {!loading && options.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                    There are no active plants. Add a plant first.
-                </p>
-            )}
-            <div className="grid gap-2 sm:grid-cols-2">
-                {options.map((plant) => (
-                    <label
-                        key={plant.id}
-                        className="flex min-h-11 cursor-pointer items-center gap-3 rounded-sm border bg-card px-3 py-2 text-sm hover:border-ink"
-                    >
-                        <input
-                            type="checkbox"
-                            className="size-4"
-                            checked={selected.has(plant.id)}
-                            onChange={() => toggle(plant.id)}
-                        />
-                        <span>
-                            <span className="font-semibold">{plant.code}</span>{" "}
-                            {plant.name}
-                            {plant.inactive && (
-                                <span className="text-muted-foreground">
-                                    {" "}
-                                    (inactive)
-                                </span>
-                            )}
+        <li>
+            <button
+                type="button"
+                onClick={onToggle}
+                disabled={isMe}
+                aria-expanded={open}
+                aria-controls={panelId}
+                className="flex w-full items-center gap-4 px-4 py-3 text-left enabled:hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ink"
+            >
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-xs font-bold">
+                    {initialsOf(name)}
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">
+                        {name}
+                        {isMe && (
+                            <span className="font-normal text-muted-foreground">
+                                {" "}
+                                (you)
+                            </span>
+                        )}
+                    </span>
+                    {user.displayName && (
+                        <span className="block truncate text-sm text-muted-foreground">
+                            {user.email}
                         </span>
-                    </label>
-                ))}
-            </div>
-
-            {save.isError && (
-                <p role="alert" className="text-sm text-late">
-                    {save.error.message}
-                </p>
+                    )}
+                </span>
+                <span className="hidden min-w-0 flex-[1.4] flex-wrap gap-1.5 md:flex">
+                    {user.roles.length === 0 ? (
+                        <span className="text-sm text-muted-foreground">
+                            {user.status === "Active" ? "No role yet" : ""}
+                        </span>
+                    ) : (
+                        user.roles.map((role) => (
+                            <span
+                                key={role}
+                                className="rounded-sm border bg-card px-2 py-0.5 text-xs font-medium"
+                            >
+                                {role}
+                            </span>
+                        ))
+                    )}
+                </span>
+                <span className="hidden w-28 shrink-0 truncate text-sm text-muted-foreground lg:block">
+                    {user.status !== "Active"
+                        ? ""
+                        : user.plants.length === 0
+                          ? "No plants"
+                          : user.plants.map((p) => p.code).join(", ")}
+                </span>
+                {isMe ? (
+                    <span className="w-6 shrink-0" />
+                ) : (
+                    <LuChevronDown
+                        aria-hidden
+                        className={cn(
+                            "size-5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none",
+                            open && "rotate-180",
+                        )}
+                    />
+                )}
+            </button>
+            {open && (
+                <div id={panelId} className="border-t bg-muted/20 p-4">
+                    <UserPanel user={user} />
+                </div>
             )}
-
-            <div className="flex flex-wrap gap-2">
-                <Button
-                    className={cn("h-11", nextButtonClass)}
-                    disabled={save.isPending}
-                    onClick={() =>
-                        save.mutate(
-                            { userId: user.id, plantIds: [...selected] },
-                            { onSuccess: () => onDone(true) },
-                        )
-                    }
-                >
-                    {save.isPending ? "Saving…" : "Save plants"}
-                </Button>
-                <Button
-                    variant="outline"
-                    className="h-11"
-                    disabled={save.isPending}
-                    onClick={() => onDone(false)}
-                >
-                    Cancel
-                </Button>
-            </div>
-        </div>
+        </li>
     );
 }

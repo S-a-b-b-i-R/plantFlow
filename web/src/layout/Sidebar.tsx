@@ -6,6 +6,7 @@ import { useMe } from "@/auth/useMe";
 import { Mark } from "@/components/Mark";
 import { OpenedBadge } from "@/components/customers/OpenedBadge";
 import { ApprovalBadge } from "@/components/surveys/ApprovalBadge";
+import { PendingUsersBadge } from "@/components/users/PendingUsersBadge";
 import { canOpen, navGroups, navigation } from "@/layout/navigation";
 import { initialsOf } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 const badges: Record<string, ReactNode> = {
     "/surveys": <ApprovalBadge />,
     "/customers": <OpenedBadge />,
+    "/users": <PendingUsersBadge />,
 };
 
 // The app's menu, grouped by the work people do. On wide screens it can shrink to a rail of icons;

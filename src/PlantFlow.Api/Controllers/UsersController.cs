@@ -1,4 +1,6 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.EntityFrameworkCore;
 using PlantFlow.Api.Data;
 using PlantFlow.Api.Domain.Identity;
@@ -36,6 +38,14 @@ public class SetPermissionOverridesRequest
     public List<PermissionOverrideDto> Overrides { get; init; } = [];
 }
 
+public class DisableUserRequest
+{
+    [StringLength(500)]
+    public string? Reason { get; init; }
+}
+
+public record PendingCountDto(int Count);
+
 // Every query here is limited to the signed-in user's company by the tenant filter.
 [ApiController]
 [Route("api/users")]
@@ -59,6 +69,11 @@ public class UsersController(
                     .Select(up => new UserPlantDto(up.PlantId, up.Plant.Code, up.Plant.Name)).ToList()))
             .ToListAsync(cancellationToken);
     }
+
+    // For the badge on Users in the menu.
+    [HttpGet("pending-count")]
+    public async Task<ActionResult<PendingCountDto>> PendingCount(CancellationToken cancellationToken) =>
+        new PendingCountDto(await db.Users.CountAsync(u => u.Status == UserStatus.Pending, cancellationToken));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<UserDetailDto>> Get(Guid id, CancellationToken cancellationToken)
@@ -84,9 +99,14 @@ public class UsersController(
     public Task<IActionResult> Reject(Guid id, CancellationToken cancellationToken) =>
         ChangeStatusAsync(id, UserStatus.Rejected, [UserStatus.Pending], "user.rejected", cancellationToken);
 
+    // Disabling someone who worked here needs a reason, and the company always keeps one active Admin.
     [HttpPost("{id:guid}/disable")]
-    public Task<IActionResult> Disable(Guid id, CancellationToken cancellationToken) =>
-        ChangeStatusAsync(id, UserStatus.Disabled, [UserStatus.Active], "user.disabled", cancellationToken);
+    public Task<IActionResult> Disable(
+        Guid id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] DisableUserRequest? request,
+        CancellationToken cancellationToken) =>
+        ChangeStatusAsync(id, UserStatus.Disabled, [UserStatus.Active], "user.disabled", cancellationToken,
+            reason: request?.Reason?.Trim() ?? "", requireReason: true);
 
     [HttpPost("{id:guid}/enable")]
     public Task<IActionResult> Enable(Guid id, CancellationToken cancellationToken) =>
@@ -107,6 +127,10 @@ public class UsersController(
         {
             return Problem(title: "One or more roles do not exist in this company.", statusCode: StatusCodes.Status400BadRequest);
         }
+
+        var keepsAdmin = await db.Roles.AnyAsync(
+            r => wanted.Contains(r.Id) && r.Name == DefaultRoles.AdminRoleName, cancellationToken);
+        if (!keepsAdmin && await IsLastAdminAsync(user.Id, cancellationToken)) return LastAdmin();
 
         db.UserRoles.RemoveRange(user.UserRoles.Where(ur => !wanted.Contains(ur.RoleId)));
         foreach (var roleId in wanted.Where(r => user.UserRoles.All(ur => ur.RoleId != r)))
@@ -179,6 +203,9 @@ public class UsersController(
         var user = await db.Users.Include(u => u.Permissions).FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
         if (user is null) return NotFound();
 
+        var deniesUsers = request.Overrides.Any(o => o.PermissionKey == Permissions.UsersManage && !o.IsGranted);
+        if (deniesUsers && await IsLastAdminAsync(user.Id, cancellationToken)) return LastAdmin();
+
         // Update in place so we never delete and re-insert the same key in one save.
         var existing = user.Permissions.ToDictionary(p => p.PermissionKey);
         foreach (var wanted in request.Overrides)
@@ -211,7 +238,8 @@ public class UsersController(
     }
 
     private async Task<IActionResult> ChangeStatusAsync(
-        Guid id, UserStatus target, UserStatus[] allowedFrom, string action, CancellationToken cancellationToken)
+        Guid id, UserStatus target, UserStatus[] allowedFrom, string action, CancellationToken cancellationToken,
+        string? reason = null, bool requireReason = false)
     {
         if (id == currentUser.UserId) return CannotChangeSelf();
 
@@ -225,6 +253,13 @@ public class UsersController(
                 statusCode: StatusCodes.Status409Conflict);
         }
 
+        if (requireReason && string.IsNullOrEmpty(reason))
+        {
+            return Problem(title: ReasonNeeded, statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (target != UserStatus.Active && await IsLastAdminAsync(user.Id, cancellationToken)) return LastAdmin();
+
         var from = user.Status;
         user.Status = target;
         if (target == UserStatus.Active && user.ApprovedAtUtc is null)
@@ -234,10 +269,29 @@ public class UsersController(
         }
 
         audit.Record(user.TenantId, action, "User", user.Id.ToString(),
-            new { From = from.ToString(), To = target.ToString() });
+            new { From = from.ToString(), To = target.ToString(), Reason = string.IsNullOrEmpty(reason) ? null : reason });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
+
+    public const string ReasonNeeded = "Give a reason for disabling this user.";
+
+    public const string LastAdminMessage =
+        "This is the company's only active Admin. Make someone else an Admin first.";
+
+    // Active, holding the Admin role, and not denied user management.
+    private IQueryable<User> ActiveAdmins() =>
+        db.Users.Where(u => u.Status == UserStatus.Active
+            && u.UserRoles.Any(ur => ur.Role.Name == DefaultRoles.AdminRoleName)
+            && !u.Permissions.Any(p => p.PermissionKey == Permissions.UsersManage && !p.IsGranted));
+
+    // True when this user is the company's only active Admin, so losing Admin would lock the company out.
+    private async Task<bool> IsLastAdminAsync(Guid userId, CancellationToken cancellationToken) =>
+        await ActiveAdmins().AnyAsync(u => u.Id == userId, cancellationToken)
+        && !await ActiveAdmins().AnyAsync(u => u.Id != userId, cancellationToken);
+
+    private ObjectResult LastAdmin() =>
+        Problem(title: LastAdminMessage, statusCode: StatusCodes.Status409Conflict);
 
     private ObjectResult CannotChangeSelf() =>
         Problem(title: "You cannot change your own account.", statusCode: StatusCodes.Status409Conflict);
