@@ -6,9 +6,17 @@ using PlantFlow.Api.Domain.Orders;
 
 namespace PlantFlow.Api.Services;
 
+// Credit volume billed on this line at the credit's locked price.
+public record InvoiceCreditUseDto(
+    Guid Id, Guid CreditId, decimal QuantityCft, decimal UnitPrice, string? SourceOrderNumber, decimal Amount);
+
+// Amount = the billed volume not covered by credit at the line's price, plus each credit use at its own price.
+// CarriedForwardCft is what goes (or went) to the customer's ledger when the line carries the rest forward.
+// CreditOverBilled is true when more credit is used than the line is billed for, which blocks the close.
 public record InvoiceLineDto(
     Guid LineId, string ProductCode, string ProductName, decimal OrderedCft, decimal DeliveredCft,
-    decimal? BilledCft, BillingBasis? Basis, string? Note, bool NeedsResolution, decimal UnitPrice, decimal Amount);
+    decimal? BilledCft, BillingBasis? Basis, string? Note, bool NeedsResolution, decimal UnitPrice, decimal Amount,
+    List<InvoiceCreditUseDto> CreditUses, decimal? CarriedForwardCft, bool CreditOverBilled);
 
 public record InvoiceAdjustmentDto(
     Guid Id, AdjustmentKind Kind, string Reason, decimal? QuantityCft, decimal Amount, DateTime CreatedAtUtc);
@@ -75,13 +83,33 @@ public class OrderInvoiceCalculator(PlantFlowDbContext db)
             })
             .ToListAsync(cancellationToken);
 
+        var uses = (await db.LedgerCreditUses.AsNoTracking().Where(u => u.OrderId == orderId)
+                .OrderBy(u => u.CreatedAtUtc)
+                .Select(u => new
+                {
+                    u.Id,
+                    u.OrderLineId,
+                    u.CreditId,
+                    u.QuantityCft,
+                    u.Credit.UnitPrice,
+                    SourceOrderNumber = u.Credit.SourceOrder != null ? u.Credit.SourceOrder.Number : null
+                })
+                .ToListAsync(cancellationToken))
+            .ToLookup(u => u.OrderLineId,
+                u => new InvoiceCreditUseDto(u.Id, u.CreditId, u.QuantityCft, u.UnitPrice, u.SourceOrderNumber,
+                    Math.Round(u.QuantityCft * u.UnitPrice, 2)));
+
         var lines = rows.Select(r =>
         {
             var differs = r.DeliveredCft != r.QuantityCft;
-            var effective = r.BilledCft ?? (differs ? r.DeliveredCft : r.QuantityCft);
+            var effective = CustomerLedger.EffectiveBilled(r.QuantityCft, r.DeliveredCft, r.BilledCft);
+            var lineUses = uses[r.Id].ToList();
+            var fromCredit = lineUses.Sum(u => u.QuantityCft);
+            var amount = Math.Round(Math.Max(0m, effective - fromCredit) * r.UnitPrice, 2) + lineUses.Sum(u => u.Amount);
+            decimal? carried = r.BillingBasis == BillingBasis.CarriedForward ? r.QuantityCft - r.DeliveredCft : null;
             return new InvoiceLineDto(
                 r.Id, r.Code, r.Name, r.QuantityCft, r.DeliveredCft, r.BilledCft, r.BillingBasis, r.BillingNote,
-                differs && r.BillingBasis is null, r.UnitPrice, Math.Round(effective * r.UnitPrice, 2));
+                differs && r.BillingBasis is null, r.UnitPrice, amount, lineUses, carried, fromCredit > effective);
         }).ToList();
 
         var charges = await db.OrderCharges.AsNoTracking().Where(c => c.OrderId == orderId).OrderBy(c => c.Description)
@@ -116,7 +144,7 @@ public class OrderInvoiceCalculator(PlantFlowDbContext db)
             (vat, total) = Totals(subtotal, taxable, vatPercent);
         }
 
-        var canClose = !final && lines.All(l => !l.NeedsResolution) && subtotal >= 0;
+        var canClose = !final && lines.All(l => !l.NeedsResolution && !l.CreditOverBilled) && subtotal >= 0;
         return new InvoiceDto(
             orderId, order.Number, order.Status, final, lines, charges, adjustments,
             concrete, chargesAmount, adjustmentsAmount, subtotal, taxable, order.VatExempt,

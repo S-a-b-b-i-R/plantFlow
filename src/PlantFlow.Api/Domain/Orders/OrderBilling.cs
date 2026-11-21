@@ -2,8 +2,9 @@ using PlantFlow.Api.Domain.Common;
 
 namespace PlantFlow.Api.Domain.Orders;
 
-// How the billed quantity of a line was decided.
-public enum BillingBasis { Delivered, Ordered, Custom }
+// How the billed quantity of a line was decided. CarriedForward bills what was delivered and, when the order
+// closes, puts the undelivered volume in the customer's ledger at the line's price.
+public enum BillingBasis { Delivered, Ordered, Custom, CarriedForward }
 
 public enum AdjustmentKind { Return, QcReject, Discount, Other }
 

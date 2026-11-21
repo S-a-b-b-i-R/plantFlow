@@ -1,6 +1,7 @@
 import type { IconType } from "react-icons";
 import {
     LuActivity,
+    LuBookOpen,
     LuBriefcase,
     LuBuilding2,
     LuCalendarDays,
@@ -89,6 +90,15 @@ export const navigation: NavItem[] = [
             PERMISSIONS.costsManage,
             PERMISSIONS.costsApprove,
         ],
+    },
+    {
+        // Balances need ledger.view; approvers who only decide closes see the To approve tab.
+        to: "/ledger",
+        group: "Finance",
+        label: "Customer ledger",
+        icon: LuBookOpen,
+        permissions: [],
+        anyOf: [PERMISSIONS.ledgerView, PERMISSIONS.ledgerApprove],
     },
     {
         to: "/operator",

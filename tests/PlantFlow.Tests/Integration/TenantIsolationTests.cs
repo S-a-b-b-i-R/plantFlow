@@ -107,4 +107,22 @@ public class TenantIsolationTests(ApiFactory factory)
         Assert.Empty(listedByB!.Items);
         Assert.Equal(HttpStatusCode.NotFound, getByB.StatusCode);
     }
+
+    // LedgerTests.Another_companys_ledger_stays_hidden covers every ledger endpoint.
+    [Fact]
+    public async Task Another_companys_ledger_credits_stay_hidden()
+    {
+        var a = await factory.CreateCompanyAsync();
+        var b = await factory.CreateCompanyAsync();
+        var customer = await TestData.CreateCustomerAsync(a.Admin.Client, "C1");
+        var product = await TestData.CreateProductAsync(a.Admin.Client);
+        (await a.Admin.Client.PostAsJsonAsync($"/api/customers/{customer}/ledger/credits",
+            new { productId = product, quantityCft = 5m, unitPrice = 100m, reason = "Opening balance" })).EnsureSuccessStatusCode();
+
+        var listedByB = await b.Admin.Client.GetFromJsonAsync<PagedResult<LedgerCustomerDto>>("/api/ledger?all=true", ApiFactory.Json);
+        var statementByB = await b.Admin.Client.GetAsync($"/api/customers/{customer}/ledger");
+
+        Assert.Empty(listedByB!.Items);
+        Assert.Equal(HttpStatusCode.NotFound, statementByB.StatusCode);
+    }
 }

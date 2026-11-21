@@ -30,6 +30,7 @@ export const permissionGroups: { area: string; keys: [string, string][] }[] = [
             ["targets.manage", "Set sales targets"],
             ["ledger.view", "See customer ledgers"],
             ["ledger.manage", "Record ledger entries"],
+            ["ledger.approve", "Approve closing ledger credits"],
         ],
     },
     {

@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/auth-context";
 import { useMe } from "@/auth/useMe";
 import { Mark } from "@/components/Mark";
 import { OpenedBadge } from "@/components/customers/OpenedBadge";
+import { CloseBadge } from "@/components/ledger/CloseBadge";
 import { ApprovalBadge } from "@/components/surveys/ApprovalBadge";
 import { SetupBadge } from "@/components/setup/SetupBadge";
 import { PendingUsersBadge } from "@/components/users/PendingUsersBadge";
@@ -18,6 +19,7 @@ const badges: Record<string, ReactNode> = {
     "/customers": <OpenedBadge />,
     "/users": <PendingUsersBadge />,
     "/setup": <SetupBadge />,
+    "/ledger": <CloseBadge />,
 };
 
 // The app's menu, grouped by the work people do. On wide screens it can shrink to a rail of icons;

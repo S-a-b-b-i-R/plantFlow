@@ -7,7 +7,9 @@ import { Field } from "./Field";
 import { parseAmount } from "./orderDraft";
 import { inputClass, nextButtonClass, panelClass } from "./styles";
 import { useOrderAct } from "./useOrderAct";
+import { useAvailableCredits } from "@/components/ledger/useLedger";
 import { api } from "@/lib/api";
+import type { AvailableCredit } from "@/lib/ledger";
 import { cft } from "@/lib/format";
 import {
     adjustmentLabel,
@@ -92,6 +94,49 @@ export function BillingPanel({
                                             {l.note ? `: ${l.note}` : ""}
                                         </span>
                                     )}
+                                    {l.carriedForwardCft !== null &&
+                                        l.carriedForwardCft > 0 && (
+                                            <span className="block text-xs font-normal text-muted-foreground">
+                                                {cft(l.carriedForwardCft)} CFT{" "}
+                                                {inv.final
+                                                    ? "went"
+                                                    : "goes, when the order closes,"}{" "}
+                                                to the customer's ledger at{" "}
+                                                {money(l.unitPrice)} per CFT
+                                            </span>
+                                        )}
+                                    {l.creditUses.map((u) => (
+                                        <span
+                                            key={u.id}
+                                            className="block text-xs font-normal"
+                                        >
+                                            {cft(u.quantityCft)} CFT from credit
+                                            {u.sourceOrderNumber
+                                                ? ` (${u.sourceOrderNumber})`
+                                                : ""}{" "}
+                                            at {money(u.unitPrice)}
+                                            {running && canResolve && (
+                                                <button
+                                                    type="button"
+                                                    disabled={act.isPending}
+                                                    onClick={() =>
+                                                        act.mutate({
+                                                            url: `${url}/credit-uses/${u.id}`,
+                                                            method: "DELETE",
+                                                        })
+                                                    }
+                                                    className="ml-2 inline-flex min-h-8 items-center text-late underline-offset-2 hover:underline"
+                                                >
+                                                    Remove
+                                                </button>
+                                            )}
+                                        </span>
+                                    ))}
+                                    {l.creditOverBilled && (
+                                        <span className="mt-1 inline-block rounded-sm border border-late/40 bg-late/10 px-1.5 py-0.5 text-xs font-semibold text-late">
+                                            More credit than billed
+                                        </span>
+                                    )}
                                 </td>
                                 <td className="px-4 py-2 text-right tabular-nums">
                                     {cft(l.orderedCft)}
@@ -152,6 +197,17 @@ export function BillingPanel({
                         />
                     ))}
                 </div>
+            )}
+
+            {running && canResolve && (
+                <CreditSection
+                    orderId={orderId}
+                    lines={inv.lines}
+                    pending={act.isPending}
+                    onUse={(body) =>
+                        act.mutate({ url: `${url}/credit-uses`, body })
+                    }
+                />
             )}
 
             {(inv.adjustments.length > 0 || (running && canResolve)) && (
@@ -255,7 +311,9 @@ export function BillingPanel({
                         <p className="text-sm text-muted-foreground">
                             {unresolved.length > 0
                                 ? "Decide what is billed on each line marked above, then close."
-                                : "The order cannot be closed yet. Record what was delivered first."}
+                                : inv.lines.some((l) => l.creditOverBilled)
+                                  ? "A line uses more credit than it is billed for. Remove some of the credit, then close."
+                                  : "The order cannot be closed yet. Record what was delivered first."}
                         </p>
                     )}
                 </footer>
@@ -392,7 +450,13 @@ function ResolveRow({
                 role="radiogroup"
                 aria-label="Bill for"
             >
-                {(Object.keys(basisLabel) as BillingBasis[]).map((b) => (
+                {(Object.keys(basisLabel) as BillingBasis[])
+                    .filter(
+                        (b) =>
+                            b !== "CarriedForward" ||
+                            line.deliveredCft < line.orderedCft,
+                    )
+                    .map((b) => (
                     <button
                         key={b}
                         type="button"
@@ -542,6 +606,149 @@ function AdjustmentForm({
                     }}
                 >
                     Add adjustment
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+// What a line is billed for right now. The API uses the same rule.
+const effectiveBilled = (l: InvoiceLine) =>
+    l.billedCft ??
+    (l.deliveredCft !== l.orderedCft ? l.deliveredCft : l.orderedCft);
+
+// The customer's open credits for the mixes on this order. Accounts bills part of a line from one,
+// at the price it was carried forward at. Nothing shows when the customer has no matching credit.
+function CreditSection({
+    orderId,
+    lines,
+    pending,
+    onUse,
+}: {
+    orderId: string;
+    lines: InvoiceLine[];
+    pending: boolean;
+    onUse: (body: {
+        lineId: string;
+        creditId: string;
+        quantityCft: number;
+    }) => void;
+}) {
+    const credits = useAvailableCredits(orderId, true);
+    if (!credits.data || credits.data.length === 0) return null;
+
+    return (
+        <div className="space-y-3 border-t px-4 py-4">
+            <h3 className="font-semibold">Customer credit</h3>
+            <p className="text-sm text-muted-foreground">
+                This customer has concrete carried forward from earlier orders.
+                Volume taken from a credit is billed at the credit's price.
+            </p>
+            {credits.data.map((c) => (
+                <CreditRow
+                    key={c.creditId}
+                    credit={c}
+                    lines={lines.filter(
+                        (l) => l.productCode === c.productCode,
+                    )}
+                    pending={pending}
+                    onUse={onUse}
+                />
+            ))}
+        </div>
+    );
+}
+
+function CreditRow({
+    credit,
+    lines,
+    pending,
+    onUse,
+}: {
+    credit: AvailableCredit;
+    lines: InvoiceLine[];
+    pending: boolean;
+    onUse: (body: {
+        lineId: string;
+        creditId: string;
+        quantityCft: number;
+    }) => void;
+}) {
+    const [lineId, setLineId] = useState(lines[0]?.lineId ?? "");
+    const line = lines.find((l) => l.lineId === lineId);
+    const room = line
+        ? Math.max(
+              0,
+              effectiveBilled(line) -
+                  line.creditUses.reduce((sum, u) => sum + u.quantityCft, 0),
+          )
+        : 0;
+    const [quantity, setQuantity] = useState(() =>
+        String(Math.min(credit.balanceCft, room)),
+    );
+    const value = parseAmount(quantity);
+    const ok =
+        line !== undefined &&
+        value !== null &&
+        value > 0 &&
+        value <= credit.balanceCft &&
+        Math.round(value * 100) === value * 100;
+
+    return (
+        <div className="rounded-sm border bg-muted/30 p-3">
+            <p className="text-sm font-medium">
+                {credit.productCode}: {cft(credit.balanceCft)} CFT at{" "}
+                {money(credit.unitPrice)}
+                <span className="font-normal text-muted-foreground">
+                    {credit.sourceOrderNumber
+                        ? `, from ${credit.sourceOrderNumber}`
+                        : ", entered by Accounts"}
+                </span>
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_10rem_auto] sm:items-end">
+                {lines.length > 1 ? (
+                    <Field label="Line">
+                        <select
+                            value={lineId}
+                            onChange={(e) => setLineId(e.target.value)}
+                            className={inputClass}
+                        >
+                            {lines.map((l) => (
+                                <option key={l.lineId} value={l.lineId}>
+                                    {l.productCode}, {cft(effectiveBilled(l))}{" "}
+                                    CFT billed
+                                </option>
+                            ))}
+                        </select>
+                    </Field>
+                ) : (
+                    <p className="text-sm text-muted-foreground">
+                        {line
+                            ? `${cft(room)} CFT of this line can still come from credit.`
+                            : ""}
+                    </p>
+                )}
+                <Field label="CFT to use">
+                    <input
+                        inputMode="decimal"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        className={inputClass}
+                    />
+                </Field>
+                <Button
+                    variant="outline"
+                    className="h-11 px-4"
+                    disabled={!ok || pending}
+                    onClick={() =>
+                        onUse({
+                            lineId,
+                            creditId: credit.creditId,
+                            quantityCft: value!,
+                        })
+                    }
+                >
+                    Use credit
                 </Button>
             </div>
         </div>

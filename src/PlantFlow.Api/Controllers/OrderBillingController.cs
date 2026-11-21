@@ -47,6 +47,24 @@ public class ResolveBillingRequest
     public List<BillingLineRequest> Lines { get; init; } = [];
 }
 
+public class CreditUseRequest
+{
+    [Required]
+    public Guid? LineId { get; init; }
+
+    [Required]
+    public Guid? CreditId { get; init; }
+
+    // At most 2 decimals.
+    [Range(0.01, 1000000.0)]
+    public decimal QuantityCft { get; init; }
+}
+
+// An open credit this order's customer can use on one of its products.
+public record AvailableCreditDto(
+    Guid CreditId, Guid ProductId, string ProductCode, decimal UnitPrice, decimal BalanceCft,
+    string? SourceOrderNumber, DateTime CreatedAtUtc);
+
 public class AdjustmentRequest
 {
     [Required]
@@ -68,8 +86,94 @@ public class AdjustmentRequest
 [Route("api/orders/{id:guid}")]
 public class OrderBillingController(
     PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit,
-    OrderApprovalFlow flow, OrderInvoiceCalculator invoices) : ControllerBase
+    OrderApprovalFlow flow, OrderInvoiceCalculator invoices, CustomerLedger ledger) : ControllerBase
 {
+    // Open credits of this order's customer for the products on the order, oldest first.
+    [HttpGet("ledger-credits")]
+    [HasPermission(Permissions.OrdersBillingResolve)]
+    public async Task<ActionResult<List<AvailableCreditDto>>> AvailableCredits(Guid id, CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.AsNoTracking().Where(o => o.Id == id)
+            .Select(o => new { o.CustomerId, Products = o.Lines.Select(l => l.ProductId).ToList() })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (order is null) return NotFound();
+
+        return await db.LedgerCredits.AsNoTracking()
+            .Where(c => c.CustomerId == order.CustomerId && c.BalanceCft > 0 && order.Products.Contains(c.ProductId))
+            .OrderBy(c => c.CreatedAtUtc)
+            .Select(c => new AvailableCreditDto(c.Id, c.ProductId, c.Product.Code, c.UnitPrice, c.BalanceCft,
+                c.SourceOrder != null ? c.SourceOrder.Number : null, c.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
+    }
+
+    // Accounts bills part of a line from a ledger credit, at the credit's locked price.
+    [HttpPost("credit-uses")]
+    [HasPermission(Permissions.OrdersBillingResolve)]
+    public async Task<IActionResult> UseCredit(Guid id, CreditUseRequest request, CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null) return NotFound();
+
+        if (order.Status != OrderStatus.InProgress)
+        {
+            return Problem(title: $"Credit can only be used on a running order. This order is {order.Status}.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var line = order.Lines.FirstOrDefault(l => l.Id == request.LineId);
+        if (line is null)
+        {
+            return Problem(title: "That line does not belong to this order.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (request.QuantityCft != Math.Round(request.QuantityCft, 2))
+        {
+            return Problem(title: "Quantities can have at most 2 decimal places.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var credit = await db.LedgerCredits.FirstOrDefaultAsync(c => c.Id == request.CreditId, cancellationToken);
+        if (credit is null) return NotFound();
+
+        var refusal = await ledger.UseAsync(order, line, credit, request.QuantityCft, cancellationToken);
+        if (refusal is not null) return Problem(title: refusal, statusCode: StatusCodes.Status409Conflict);
+
+        return await SaveLedgerAsync(cancellationToken) ?? NoContent();
+    }
+
+    [HttpDelete("credit-uses/{useId:guid}")]
+    [HasPermission(Permissions.OrdersBillingResolve)]
+    public async Task<IActionResult> RemoveCreditUse(Guid id, Guid useId, CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null) return NotFound();
+
+        var use = await db.LedgerCreditUses.Include(u => u.Credit)
+            .FirstOrDefaultAsync(u => u.Id == useId && u.OrderId == id, cancellationToken);
+        if (use is null) return NotFound();
+
+        if (order.Status != OrderStatus.InProgress)
+        {
+            return Problem(title: $"Credit can only be removed from a running order. This order is {order.Status}.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        ledger.RemoveUse(order, use);
+        return await SaveLedgerAsync(cancellationToken) ?? NoContent();
+    }
+
+    private async Task<IActionResult?> SaveLedgerAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return null;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Problem(title: CustomerLedger.ChangedMessage, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
     [HttpGet("invoice")]
     [HasPermission(Permissions.OrdersView)]
     public async Task<ActionResult<InvoiceDto>> Invoice(Guid id, CancellationToken cancellationToken)
@@ -163,6 +267,12 @@ public class OrderBillingController(
             {
                 return Problem(title: "Only a custom billing takes a quantity.", statusCode: StatusCodes.Status400BadRequest);
             }
+
+            if (r.Basis == BillingBasis.CarriedForward && byId[r.LineId!.Value].DeliveredCft >= byId[r.LineId!.Value].QuantityCft)
+            {
+                return Problem(title: "Only a line delivered short of what was ordered can carry the rest forward.",
+                    statusCode: StatusCodes.Status409Conflict);
+            }
         }
 
         var log = new List<object>();
@@ -171,7 +281,7 @@ public class OrderBillingController(
             var line = byId[r.LineId!.Value];
             var billed = r.Basis switch
             {
-                BillingBasis.Delivered => line.DeliveredCft,
+                BillingBasis.Delivered or BillingBasis.CarriedForward => line.DeliveredCft,
                 BillingBasis.Ordered => line.QuantityCft,
                 _ => r.BilledCft!.Value
             };
@@ -282,10 +392,20 @@ public class OrderBillingController(
             return Problem(title: "The adjustments are larger than the amount billed.", statusCode: StatusCodes.Status409Conflict);
         }
 
+        var overUsed = await ledger.OverUsedLinesAsync(order, cancellationToken);
+        if (overUsed.Count > 0)
+        {
+            return Problem(title: "More credit is used than these lines are billed for: " + string.Join(", ", overUsed) +
+                                  ". Remove some of the credit first.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
         foreach (var line in order.Lines.Where(l => l.BilledCft is null))
         {
             line.BilledCft = line.QuantityCft;
         }
+
+        ledger.CarryForward(order);
 
         order.ClosedBy = currentUser.UserId;
         order.ClosedAtUtc = DateTime.UtcNow;

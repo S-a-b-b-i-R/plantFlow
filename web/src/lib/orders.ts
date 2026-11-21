@@ -21,7 +21,11 @@ export type ApprovalStage =
     "SalesManager" | "Management" | "Technical" | "Credit";
 export type ApprovalDecision =
     "Pending" | "Approved" | "Rejected" | "Withdrawn";
-export type BillingBasis = "Delivered" | "Ordered" | "Custom";
+export type BillingBasis =
+    | "Delivered"
+    | "Ordered"
+    | "Custom"
+    | "CarriedForward";
 export type AdjustmentKind = "Return" | "QcReject" | "Discount" | "Other";
 
 export interface Paged<T> {
@@ -121,6 +125,22 @@ export interface InvoiceLine {
     note: string | null;
     needsResolution: boolean;
     unitPrice: number;
+    // The billed volume not covered by credit at the line's price, plus each credit use at its own price.
+    amount: number;
+    creditUses: InvoiceCreditUse[];
+    // What goes (or went) to the customer's ledger when the line carries the rest forward.
+    carriedForwardCft: number | null;
+    // More credit is used than the line is billed for. The order can't close until some is removed.
+    creditOverBilled: boolean;
+}
+
+// Credit volume billed on a line at the credit's locked price.
+export interface InvoiceCreditUse {
+    id: string;
+    creditId: string;
+    quantityCft: number;
+    unitPrice: number;
+    sourceOrderNumber: string | null;
     amount: number;
 }
 
@@ -260,6 +280,7 @@ export const basisLabel: Record<BillingBasis, string> = {
     Delivered: "What was delivered",
     Ordered: "What was ordered",
     Custom: "Another quantity",
+    CarriedForward: "Delivered, carry the rest forward",
 };
 
 export const adjustmentLabel: Record<AdjustmentKind, string> = {

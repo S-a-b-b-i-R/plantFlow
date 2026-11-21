@@ -46,6 +46,8 @@ public static class Permissions
     public const string OrdersBillingResolve = "orders.billing.resolve";
     public const string LedgerView = "ledger.view";
     public const string LedgerManage = "ledger.manage";
+    // Approve closing a ledger credit (refunded or not needed). Never by the person who asked for it.
+    public const string LedgerApprove = "ledger.approve";
 
     // Site surveys
     public const string SiteSurveysView = "sitesurveys.view";

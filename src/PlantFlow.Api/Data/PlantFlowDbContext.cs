@@ -11,6 +11,7 @@ using PlantFlow.Api.Domain.Costing;
 using PlantFlow.Api.Domain.Pricing;
 using PlantFlow.Api.Domain.Orders;
 using PlantFlow.Api.Domain.Planning;
+using PlantFlow.Api.Domain.Ledger;
 
 namespace PlantFlow.Api.Data;
 
@@ -69,6 +70,10 @@ public class PlantFlowDbContext : DbContext
     public DbSet<SiteSurveyImage> SiteSurveyImages => Set<SiteSurveyImage>();
     public DbSet<TruckLoad> TruckLoads => Set<TruckLoad>();
     public DbSet<ReturnedConcrete> ReturnedConcretes => Set<ReturnedConcrete>();
+    public DbSet<LedgerCredit> LedgerCredits => Set<LedgerCredit>();
+    public DbSet<LedgerCreditUse> LedgerCreditUses => Set<LedgerCreditUse>();
+    public DbSet<LedgerCorrection> LedgerCorrections => Set<LedgerCorrection>();
+    public DbSet<LedgerClose> LedgerCloses => Set<LedgerClose>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PlantFlowDbContext).Assembly);
