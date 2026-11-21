@@ -53,4 +53,8 @@ public class Tenant : AuditableEntity
 
     // A rep keeps a customer while they get an order confirmed at least this often. 0 = they keep it for good.
     public int CustomerOwnershipDays { get; set; } = 120;
+
+    // The month (1-12) the company's year starts in. Quarters for targets count from it: 7 for the Bangladesh
+    // fiscal year, 1 for the calendar year. Fixed once any target exists.
+    public int YearStartMonth { get; set; } = 1;
 }

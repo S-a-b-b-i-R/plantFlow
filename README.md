@@ -2,7 +2,7 @@
 
 Multi-tenant operations platform for ready-mix concrete companies: orders, pricing, shift planning, batching and dispatch, returns and quality control, and live dashboards.
 
-> **Status: in active development.** The API covers the full flow from master data to billing, and the React app already runs the plant floor: a live operations board, a batching console, the quality screen, the orders area (create, approve, confirm, bill) and the pricing area (recipes, costs, selling prices, their approvals, the cost and margin report and the pricing rules). Phase 2 (targets, invoices, exports) is next. See [Roadmap](#roadmap).
+> **Status: in active development.** The API covers the full flow from master data to billing, and the React app already runs the plant floor: a live operations board, a batching console, the quality screen, the orders area (create, approve, confirm, bill) and the pricing area (recipes, costs, selling prices, their approvals, the cost and margin report and the pricing rules). Customer volume ledger and quarterly targets are done; invoices and exports are next. See [Roadmap](#roadmap).
 
 PlantFlow is an independent portfolio project, designed from public domain knowledge in [`docs/domain-spec-v4.md`](docs/domain-spec-v4.md). All data is synthetic.
 
@@ -72,7 +72,7 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 | Company onboarding: platform console (create, suspend with a reason, place first Admin), join codes for staff | Done    |
 | Setup checklist: a Get started list for a new company's Admin, progress per company on the platform console | Done    |
 | Customer volume ledger: carry short-closed volume forward at the order price, use it on later orders, close with approval | Done    |
-| Quarterly volume targets against billed volume                                                       | Planned |
+| Quarterly volume targets for the company, plants and reps, against billed volume                    | Done    |
 
 ## Architecture
 
@@ -198,9 +198,8 @@ Integration tests start a throwaway SQL Server container (Docker must be running
 
 1. **Shift planning screens in the web app**
 2. **Administration screens:** assigning users to companies, roles and permissions (assigning users to plants is done)
-3. **Targets:** quarterly volume targets against billed volume (the customer volume ledger is done)
-4. **Web tests:** component tests for the console and the board
-5. **Deployment:** a hosted demo
+3. **Web tests:** component tests for the console and the board
+4. **Deployment:** a hosted demo
    Later: real-time updates (SignalR) instead of polling, a driver mobile app with GPS, notifications, invoicing, material stock, exports, Bangla and English.
 
 ## Author

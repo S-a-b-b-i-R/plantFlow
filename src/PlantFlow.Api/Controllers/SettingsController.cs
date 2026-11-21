@@ -13,8 +13,11 @@ public record TenantSettingsDto(
     string Name, string Slug, VolumeUnit VolumeUnit, decimal? PumpFreeAboveCft,
     SurveyRequirement RequireSurveyBeforePlanning, int PumpRestShifts,
     bool RequireCreditApproval, bool VatOnConcrete, int AverageSpeedKmh, int PumpAssemblyMinutes, decimal TruckLoadCft, int LateThresholdMinutes, int UtcOffsetMinutes, int ReturnWindowMinutes, int CustomerOwnershipDays,
+    int YearStartMonth,
     // True once the company has any order. The time zone decides which day a shift falls on, so it is fixed from then on.
-    bool TimeZoneLocked = false);
+    bool TimeZoneLocked = false,
+    // True once any target is set. The year's start month decides which months each quarter covers.
+    bool YearStartLocked = false);
 
 // What every signed-in user needs to display things. Nothing commercial.
 public record PublicSettingsDto(string Name, VolumeUnit VolumeUnit);
@@ -72,6 +75,10 @@ public class TenantSettingsRequest
     [Range(0, 3650)]
     public int? CustomerOwnershipDays { get; init; }
 
+    // The month (1-12) the company's year starts in, for quarterly targets. Leave out to keep the current value.
+    [Range(1, 12)]
+    public int? YearStartMonth { get; init; }
+
     // Needed when VAT on concrete, credit approval or the free pump threshold changes. Kept in the audit log.
     [StringLength(500)]
     public string? Reason { get; init; }
@@ -84,15 +91,18 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
     public const string TimeZoneLockedMessage =
         "The time zone can't change once the company has orders, because it decides which day each shift and pour falls on.";
 
-    private static TenantSettingsDto ToDto(Tenant t, bool timeZoneLocked = false) => new(
-        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete, t.AverageSpeedKmh, t.PumpAssemblyMinutes, t.TruckLoadCft, t.LateThresholdMinutes, t.UtcOffsetMinutes, t.ReturnWindowMinutes, t.CustomerOwnershipDays, timeZoneLocked);
+    public const string YearStartLockedMessage =
+        "The month the year starts can't change once targets are set, because it decides which months each quarter covers.";
+
+    private static TenantSettingsDto ToDto(Tenant t, bool timeZoneLocked = false, bool yearStartLocked = false) => new(
+        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete, t.AverageSpeedKmh, t.PumpAssemblyMinutes, t.TruckLoadCft, t.LateThresholdMinutes, t.UtcOffsetMinutes, t.ReturnWindowMinutes, t.CustomerOwnershipDays, t.YearStartMonth, timeZoneLocked, yearStartLocked);
 
     [HttpGet]
     [HasPermission(Permissions.SettingsManage)]
     public async Task<ActionResult<TenantSettingsDto>> Get(CancellationToken cancellationToken)
     {
         var tenant = await LoadTenantAsync(cancellationToken);
-        return ToDto(tenant, await db.Orders.AnyAsync(cancellationToken));
+        return ToDto(tenant, await db.Orders.AnyAsync(cancellationToken), await db.VolumeTargets.AnyAsync(cancellationToken));
     }
 
     // No permission attribute: the default policy applies, so any active signed-in user can read it.
@@ -123,6 +133,12 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
             return Problem(title: TimeZoneLockedMessage, statusCode: StatusCodes.Status409Conflict);
         }
 
+        if (request.YearStartMonth is { } newStart && newStart != tenant.YearStartMonth
+            && await db.VolumeTargets.AnyAsync(cancellationToken))
+        {
+            return Problem(title: YearStartLockedMessage, statusCode: StatusCodes.Status409Conflict);
+        }
+
         // These change what customers pay or who must approve an order, so the change carries a reason.
         var needsReason = new List<string>();
         if (request.VatOnConcrete != tenant.VatOnConcrete) needsReason.Add("VAT on concrete");
@@ -147,6 +163,7 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
         if (request.UtcOffsetMinutes is { } offset) tenant.UtcOffsetMinutes = offset;
         if (request.ReturnWindowMinutes is { } returnWindow) tenant.ReturnWindowMinutes = returnWindow;
         if (request.CustomerOwnershipDays is { } ownershipDays) tenant.CustomerOwnershipDays = ownershipDays;
+        if (request.YearStartMonth is { } yearStart) tenant.YearStartMonth = yearStart;
         tenant.TruckLoadCft = request.TruckLoadCft;
 
         audit.Record(tenant.Id, "tenant.settings_changed", "Tenant", tenant.Id.ToString(),
@@ -161,6 +178,7 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
                 UtcOffsetMinutesChanged = before.UtcOffsetMinutes != tenant.UtcOffsetMinutes,
                 ReturnWindowMinutesChanged = before.ReturnWindowMinutes != tenant.ReturnWindowMinutes,
                 CustomerOwnershipDaysChanged = before.CustomerOwnershipDays != tenant.CustomerOwnershipDays,
+                YearStartMonthChanged = before.YearStartMonth != tenant.YearStartMonth,
                 Reason = string.IsNullOrEmpty(reason) ? null : reason
             });
         await db.SaveChangesAsync(cancellationToken);

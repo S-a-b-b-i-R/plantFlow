@@ -125,4 +125,25 @@ public class TenantIsolationTests(ApiFactory factory)
         Assert.Empty(listedByB!.Items);
         Assert.Equal(HttpStatusCode.NotFound, statementByB.StatusCode);
     }
+
+    [Fact]
+    public async Task Another_companys_targets_stay_hidden()
+    {
+        var a = await factory.CreateCompanyAsync();
+        var b = await factory.CreateCompanyAsync();
+        var plant = await TestData.CreatePlantAsync(a.Admin.Client, "P1");
+        var now = (await a.Admin.Client.GetFromJsonAsync<TargetQuarterDto>("/api/targets", ApiFactory.Json))!;
+        var set = await a.Admin.Client.PutAsJsonAsync("/api/targets",
+            new { year = now.Year, quarter = now.Quarter, level = "Company", volumeCft = 100m });
+        var targetId = (await set.Content.ReadFromJsonAsync<TargetQuarterDto>(ApiFactory.Json))!.Company!.TargetId;
+
+        var seenByB = (await b.Admin.Client.GetFromJsonAsync<TargetQuarterDto>("/api/targets", ApiFactory.Json))!;
+        var plantTargetByB = await b.Admin.Client.PutAsJsonAsync("/api/targets",
+            new { year = now.Year, quarter = now.Quarter, level = "Plant", plantId = plant, volumeCft = 10m });
+
+        Assert.Null(seenByB.Company!.TargetCft);
+        Assert.DoesNotContain(seenByB.Plants, p => p.PlantId == plant);
+        Assert.Equal(HttpStatusCode.BadRequest, plantTargetByB.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await b.Admin.Client.DeleteAsync($"/api/targets/{targetId}")).StatusCode);
+    }
 }
