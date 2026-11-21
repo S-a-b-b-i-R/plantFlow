@@ -235,7 +235,8 @@ public class OrderApprovalTests(ApiFactory factory)
             settings.PumpFreeAboveCft,
             settings.RequireSurveyBeforePlanning,
             settings.PumpRestShifts,
-            requireCreditApproval = true
+            requireCreditApproval = true,
+            reason = "Test setup"
         }, ApiFactory.Json)).EnsureSuccessStatusCode();
 
         // At the floor: manager, then credit. No Management stage.

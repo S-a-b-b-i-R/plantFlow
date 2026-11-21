@@ -40,6 +40,7 @@ export const PERMISSIONS = {
     ordersClose: "orders.close",
     ordersBillingResolve: "orders.billing.resolve",
     usersManage: "users.manage",
+    settingsManage: "settings.manage",
 };
 
 export const can = (me: Me, permission: string) =>

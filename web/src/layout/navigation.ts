@@ -6,6 +6,7 @@ import {
     LuCalendarDays,
     LuCarFront,
     LuPackage,
+    LuSettings,
     LuClipboardList,
     LuFactory,
     LuFlaskConical,
@@ -138,6 +139,14 @@ export const navigation: NavItem[] = [
         label: "Users",
         icon: LuUsers,
         permissions: [PERMISSIONS.usersManage, PERMISSIONS.masterDataView],
+    },
+    {
+        // Company-wide rules that change billing and planning, so only Admin has settings.manage.
+        to: "/settings",
+        group: "Setup",
+        label: "Settings",
+        icon: LuSettings,
+        permissions: [PERMISSIONS.settingsManage],
     },
 ];
 

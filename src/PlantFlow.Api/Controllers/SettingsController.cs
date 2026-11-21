@@ -12,7 +12,9 @@ namespace PlantFlow.Api.Controllers;
 public record TenantSettingsDto(
     string Name, string Slug, VolumeUnit VolumeUnit, decimal? PumpFreeAboveCft,
     SurveyRequirement RequireSurveyBeforePlanning, int PumpRestShifts,
-    bool RequireCreditApproval, bool VatOnConcrete, int AverageSpeedKmh, int PumpAssemblyMinutes, decimal TruckLoadCft, int LateThresholdMinutes, int UtcOffsetMinutes, int ReturnWindowMinutes, int CustomerOwnershipDays);
+    bool RequireCreditApproval, bool VatOnConcrete, int AverageSpeedKmh, int PumpAssemblyMinutes, decimal TruckLoadCft, int LateThresholdMinutes, int UtcOffsetMinutes, int ReturnWindowMinutes, int CustomerOwnershipDays,
+    // True once the company has any order. The time zone decides which day a shift falls on, so it is fixed from then on.
+    bool TimeZoneLocked = false);
 
 // What every signed-in user needs to display things. Nothing commercial.
 public record PublicSettingsDto(string Name, VolumeUnit VolumeUnit);
@@ -69,21 +71,28 @@ public class TenantSettingsRequest
     // Leave out to keep the current value.
     [Range(0, 3650)]
     public int? CustomerOwnershipDays { get; init; }
+
+    // Needed when VAT on concrete, credit approval or the free pump threshold changes. Kept in the audit log.
+    [StringLength(500)]
+    public string? Reason { get; init; }
 }
 
 [ApiController]
 [Route("api/settings")]
 public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
-    private static TenantSettingsDto ToDto(Tenant t) => new(
-        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete, t.AverageSpeedKmh, t.PumpAssemblyMinutes, t.TruckLoadCft, t.LateThresholdMinutes, t.UtcOffsetMinutes, t.ReturnWindowMinutes, t.CustomerOwnershipDays);
+    public const string TimeZoneLockedMessage =
+        "The time zone can't change once the company has orders, because it decides which day each shift and pour falls on.";
+
+    private static TenantSettingsDto ToDto(Tenant t, bool timeZoneLocked = false) => new(
+        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete, t.AverageSpeedKmh, t.PumpAssemblyMinutes, t.TruckLoadCft, t.LateThresholdMinutes, t.UtcOffsetMinutes, t.ReturnWindowMinutes, t.CustomerOwnershipDays, timeZoneLocked);
 
     [HttpGet]
     [HasPermission(Permissions.SettingsManage)]
     public async Task<ActionResult<TenantSettingsDto>> Get(CancellationToken cancellationToken)
     {
         var tenant = await LoadTenantAsync(cancellationToken);
-        return ToDto(tenant);
+        return ToDto(tenant, await db.Orders.AnyAsync(cancellationToken));
     }
 
     // No permission attribute: the default policy applies, so any active signed-in user can read it.
@@ -107,6 +116,23 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
 
         var tenant = await LoadTenantAsync(cancellationToken);
         var before = ToDto(tenant);
+
+        if (request.UtcOffsetMinutes is { } newOffset && newOffset != tenant.UtcOffsetMinutes
+            && await db.Orders.AnyAsync(cancellationToken))
+        {
+            return Problem(title: TimeZoneLockedMessage, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        // These change what customers pay or who must approve an order, so the change carries a reason.
+        var needsReason = new List<string>();
+        if (request.VatOnConcrete != tenant.VatOnConcrete) needsReason.Add("VAT on concrete");
+        if (request.RequireCreditApproval != tenant.RequireCreditApproval) needsReason.Add("credit approval");
+        if (request.PumpFreeAboveCft != tenant.PumpFreeAboveCft) needsReason.Add("the free pump threshold");
+        var reason = request.Reason?.Trim();
+        if (needsReason.Count > 0 && string.IsNullOrEmpty(reason))
+        {
+            return Problem(title: ReasonMessage(needsReason), statusCode: StatusCodes.Status400BadRequest);
+        }
 
         tenant.Name = request.Name.Trim();
         tenant.VolumeUnit = request.VolumeUnit!.Value;
@@ -134,10 +160,20 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
                 LateThresholdMinutesChanged = before.LateThresholdMinutes != tenant.LateThresholdMinutes,
                 UtcOffsetMinutesChanged = before.UtcOffsetMinutes != tenant.UtcOffsetMinutes,
                 ReturnWindowMinutesChanged = before.ReturnWindowMinutes != tenant.ReturnWindowMinutes,
-                CustomerOwnershipDaysChanged = before.CustomerOwnershipDays != tenant.CustomerOwnershipDays
+                CustomerOwnershipDaysChanged = before.CustomerOwnershipDays != tenant.CustomerOwnershipDays,
+                Reason = string.IsNullOrEmpty(reason) ? null : reason
             });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
+    }
+
+    // "Give a reason for changing VAT on concrete and credit approval."
+    public static string ReasonMessage(IReadOnlyList<string> changed)
+    {
+        var list = changed.Count == 1
+            ? changed[0]
+            : string.Join(", ", changed.Take(changed.Count - 1)) + " and " + changed[^1];
+        return $"Give a reason for changing {list}.";
     }
 
     // Tenants are not tenant-filtered (they are the tenants), so pick the signed-in user's own explicitly.

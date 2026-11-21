@@ -17,7 +17,8 @@ public class SettingsTests(ApiFactory factory)
             volumeUnit,
             pumpFreeAboveCft = pumpFree,
             requireSurveyBeforePlanning = survey,
-            pumpRestShifts = rest
+            pumpRestShifts = rest,
+            reason = "Test setup"
         };
 
     [Fact]
@@ -128,5 +129,64 @@ public class SettingsTests(ApiFactory factory)
         Assert.Equal(VolumeUnit.Cft, seenByB.VolumeUnit);
         Assert.Null(seenByB.PumpFreeAboveCft);
         Assert.Equal(1, seenByB.PumpRestShifts);
+    }
+
+    // Reads the current settings and sends them back with the given changes and reason.
+    private static async Task<HttpResponseMessage> ChangeAsync(
+        HttpClient admin, Func<TenantSettingsDto, TenantSettingsDto> change, string? reason)
+    {
+        var current = (await admin.GetFromJsonAsync<TenantSettingsDto>("/api/settings", ApiFactory.Json))!;
+        var next = change(current);
+        return await admin.PutAsJsonAsync("/api/settings", new
+        {
+            next.Name, next.VolumeUnit, next.PumpFreeAboveCft, next.RequireSurveyBeforePlanning, next.PumpRestShifts,
+            next.RequireCreditApproval, next.VatOnConcrete, next.AverageSpeedKmh, next.PumpAssemblyMinutes,
+            next.TruckLoadCft, next.LateThresholdMinutes, next.UtcOffsetMinutes, next.ReturnWindowMinutes,
+            next.CustomerOwnershipDays, reason
+        }, ApiFactory.Json);
+    }
+
+    [Fact]
+    public async Task Changing_vat_credit_approval_or_the_free_pump_threshold_needs_a_reason()
+    {
+        var admin = (await factory.CreateCompanyAsync()).Admin.Client;
+
+        var vat = await ChangeAsync(admin, s => s with { VatOnConcrete = false }, null);
+        var both = await ChangeAsync(admin, s => s with { RequireCreditApproval = true, PumpFreeAboveCft = 500m }, " ");
+        var other = await ChangeAsync(admin, s => s with { AverageSpeedKmh = 30 }, null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, vat.StatusCode);
+        Assert.Contains("Give a reason for changing VAT on concrete.", await vat.Content.ReadAsStringAsync());
+        Assert.Contains("Give a reason for changing credit approval and the free pump threshold.", await both.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.NoContent, other.StatusCode);
+
+        var withReason = await ChangeAsync(admin, s => s with { VatOnConcrete = false }, "Customers are VAT registered");
+        Assert.Equal(HttpStatusCode.NoContent, withReason.StatusCode);
+        var audit = await admin.GetFromJsonAsync<List<AuditLogDto>>("/api/audit", ApiFactory.Json);
+        Assert.Contains(audit!, e => e.Action == "tenant.settings_changed" && e.ChangesJson!.Contains("Customers are VAT registered"));
+    }
+
+    [Fact]
+    public async Task The_time_zone_is_fixed_once_the_company_has_orders()
+    {
+        var admin = (await factory.CreateCompanyAsync()).Admin.Client;
+
+        var before = await admin.GetFromJsonAsync<TenantSettingsDto>("/api/settings", ApiFactory.Json);
+        Assert.False(before!.TimeZoneLocked);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await ChangeAsync(admin, s => s with { UtcOffsetMinutes = 330 }, null)).StatusCode);
+
+        var w = await TestData.CreateOrderWorldAsync(admin);
+        await TestData.CreateDraftAsync(admin, w, [TestData.LineBody(w.ProductId, 50m)]);
+
+        var after = await admin.GetFromJsonAsync<TenantSettingsDto>("/api/settings", ApiFactory.Json);
+        Assert.True(after!.TimeZoneLocked);
+        var moved = await ChangeAsync(admin, s => s with { UtcOffsetMinutes = 360 }, null);
+        Assert.Equal(HttpStatusCode.Conflict, moved.StatusCode);
+        Assert.Contains(SettingsController.TimeZoneLockedMessage, await moved.Content.ReadAsStringAsync());
+
+        // Saving other settings with the same time zone still works.
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await ChangeAsync(admin, s => s with { AverageSpeedKmh = 30 }, null)).StatusCode);
     }
 }
