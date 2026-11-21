@@ -1,4 +1,5 @@
 using PlantFlow.Api.Domain.MasterData;
+using PlantFlow.Api.Services;
 
 namespace PlantFlow.Tests;
 
@@ -33,5 +34,18 @@ public class PlantShiftTests
 
         Assert.Equal(expected, a.OverlapsWith(b));
         Assert.Equal(expected, b.OverlapsWith(a));
+    }
+
+    [Theory]
+    [InlineData("06:00", "14:00", "2026-11-21", "2026-11-21T13:59", true)]  // still running
+    [InlineData("06:00", "14:00", "2026-11-21", "2026-11-21T14:00", false)] // just ended
+    [InlineData("06:00", "14:00", "2026-11-22", "2026-11-21T20:00", true)]  // tomorrow
+    [InlineData("22:00", "06:00", "2026-11-20", "2026-11-21T05:30", true)]  // yesterday's night shift, still running
+    [InlineData("22:00", "06:00", "2026-11-20", "2026-11-21T06:30", false)] // yesterday's night shift, ended
+    public void A_shift_is_finished_once_its_end_has_passed(string start, string end, string date, string now, bool notFinished)
+    {
+        var result = PlantUsage.NotFinished(Shift(start, end), DateOnly.Parse(date), DateTime.Parse(now));
+
+        Assert.Equal(notFinished, result);
     }
 }

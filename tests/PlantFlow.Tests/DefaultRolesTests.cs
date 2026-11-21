@@ -32,6 +32,14 @@ public class DefaultRolesTests
     }
 
     [Fact]
+    public void Only_plant_managers_and_admins_set_up_plants()
+    {
+        var managers = DefaultRoles.All.Where(r => r.Value.Contains(Permissions.PlantsManage)).Select(r => r.Key);
+
+        Assert.Equal(["Admin", "Plant Manager"], managers.Order());
+    }
+
+    [Fact]
     public void Admin_role_has_every_permission()
     {
         Assert.Equal(Permissions.All.Order(), DefaultRoles.All["Admin"].Order());

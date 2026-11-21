@@ -30,7 +30,8 @@ public class PlantShiftRequest
 }
 
 [ApiController]
-public class PlantShiftsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
+public class PlantShiftsController(
+    PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit, PlantUsage usage) : ControllerBase
 {
     private static PlantShiftDto ToDto(PlantShift s) => new(
         s.Id, s.PlantId, s.Name, s.StartTime, s.EndTime, s.CrossesMidnight, s.DurationMinutes, s.Status);
@@ -51,7 +52,7 @@ public class PlantShiftsController(PlantFlowDbContext db, ICurrentUser currentUs
     }
 
     [HttpPost("api/plants/{plantId:guid}/shifts")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.PlantsManage)]
     public async Task<ActionResult<PlantShiftDto>> Create(
         Guid plantId, PlantShiftRequest request, CancellationToken cancellationToken)
     {
@@ -80,7 +81,7 @@ public class PlantShiftsController(PlantFlowDbContext db, ICurrentUser currentUs
     }
 
     [HttpPut("api/plant-shifts/{id:guid}")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.PlantsManage)]
     public async Task<IActionResult> Update(Guid id, PlantShiftRequest request, CancellationToken cancellationToken)
     {
         var shift = await db.PlantShifts.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
@@ -88,6 +89,19 @@ public class PlantShiftsController(PlantFlowDbContext db, ICurrentUser currentUs
 
         var problem = await CheckAsync(shift.PlantId, request, id, cancellationToken);
         if (problem is not null) return problem;
+
+        // Planned pours were timed against this shift, so its times and status stay put while any are ahead.
+        // A rename is fine.
+        var changesTiming = shift.StartTime != request.StartTime || shift.EndTime != request.EndTime
+            || (shift.Status == ActiveStatus.Active && request.Status == ActiveStatus.Inactive);
+        if (changesTiming && await usage.OfShiftAsync(shift, cancellationToken) is { } upcoming)
+        {
+            var pours = upcoming.Count == 1 ? "1 pour is" : $"{upcoming.Count} pours are";
+            return Problem(
+                title: $"{pours} planned in this shift from {upcoming.FirstDate:d MMM yyyy}. "
+                    + "Move or remove them before you change the shift's times or deactivate it.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         shift.Name = request.Name.Trim();
         shift.StartTime = request.StartTime!.Value;

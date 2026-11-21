@@ -56,7 +56,7 @@ public class BatchingPlantsController(
     }
 
     [HttpPost("api/plants/{plantId:guid}/batching-plants")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.PlantsManage)]
     public async Task<ActionResult<BatchingPlantDto>> Create(
         Guid plantId, BatchingPlantRequest request, CancellationToken cancellationToken)
     {
@@ -93,7 +93,7 @@ public class BatchingPlantsController(
     }
 
     [HttpPut("api/batching-plants/{id:guid}")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.PlantsManage)]
     public async Task<IActionResult> Update(Guid id, BatchingPlantRequest request, CancellationToken cancellationToken)
     {
         var batchingPlant = await db.BatchingPlants.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);

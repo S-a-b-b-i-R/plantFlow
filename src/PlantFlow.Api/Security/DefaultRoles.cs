@@ -52,7 +52,8 @@ public static class DefaultRoles
         ["Plant Manager"] =
         [
             MasterDataView, OrdersView, DeliveriesTrack, DeliveriesPlanApprove, DeliveriesPlanOverride,
-            BatchesManage, ReturnsManage, TargetsView, DashboardsView, SiteSurveysView, SiteSurveysApprove
+            BatchesManage, ReturnsManage, TargetsView, DashboardsView, SiteSurveysView, SiteSurveysApprove,
+            PlantsManage
         ],
 
         ["Management"] = [OrdersView, OrdersApproveManagement, CostsApprove, DeliveriesTrack, TargetsView, DashboardsView]

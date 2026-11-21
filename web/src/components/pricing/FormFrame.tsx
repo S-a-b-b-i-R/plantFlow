@@ -11,6 +11,7 @@ export function FormFrame({
     onDone,
     onCancel,
     children,
+    saveLabel,
 }: {
     title: string;
     canSave: boolean;
@@ -19,6 +20,7 @@ export function FormFrame({
     onDone: () => void;
     onCancel: () => void;
     children: ReactNode;
+    saveLabel?: string;
 }) {
     return (
         <FormShell
@@ -28,6 +30,7 @@ export function FormFrame({
             error={save.isError ? save.error.message : null}
             onSave={() => save.mutate(body, { onSuccess: onDone })}
             onCancel={onCancel}
+            saveLabel={saveLabel}
         >
             {children}
         </FormShell>

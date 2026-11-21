@@ -12,6 +12,7 @@ export function FormShell({
     error,
     onSave,
     onCancel,
+    saveLabel = "Save draft",
 }: {
     title: string;
     children: ReactNode;
@@ -20,6 +21,7 @@ export function FormShell({
     error: string | null;
     onSave: () => void;
     onCancel: () => void;
+    saveLabel?: string;
 }) {
     const submit = (event: FormEvent) => {
         event.preventDefault();
@@ -41,7 +43,7 @@ export function FormShell({
                     className={cn("h-10 px-5", nextButtonClass)}
                     disabled={!canSave || saving}
                 >
-                    {saving ? "Saving…" : "Save draft"}
+                    {saving ? "Saving…" : saveLabel}
                 </Button>
                 <Button
                     type="button"
