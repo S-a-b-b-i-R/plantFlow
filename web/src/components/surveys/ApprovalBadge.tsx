@@ -13,7 +13,7 @@ export function ApprovalBadge() {
 
     return (
         <span
-            className="ml-2 grid h-5 min-w-5 place-items-center rounded-full bg-signal px-1.5 text-xs font-bold text-ink"
+            className="grid h-5 min-w-5 place-items-center rounded-full bg-signal px-1.5 text-xs font-bold text-ink"
             aria-label={`${count} to approve`}
         >
             {count}

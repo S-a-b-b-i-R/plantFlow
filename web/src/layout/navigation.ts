@@ -17,8 +17,13 @@ import {
 import { can, PERMISSIONS } from "@/auth/permissions";
 import type { Me } from "@/lib/types";
 
+// The sidebar shows the groups in this order. A group with nothing the person can open is left out.
+export const navGroups = ["Operations", "Sales", "Finance", "Setup"] as const;
+export type NavGroup = (typeof navGroups)[number];
+
 export type NavItem = {
     to: string;
+    group: NavGroup;
     label: string;
     icon: IconType;
     // Every one of these is needed. The batching console also reads the live board.
@@ -30,12 +35,14 @@ export type NavItem = {
 export const navigation: NavItem[] = [
     {
         to: "/live",
+        group: "Operations",
         label: "Live operations",
         icon: LuActivity,
         permissions: [PERMISSIONS.dashboardsView],
     },
     {
         to: "/orders",
+        group: "Sales",
         label: "Orders",
         icon: LuClipboardList,
         permissions: [PERMISSIONS.ordersView],
@@ -43,6 +50,7 @@ export const navigation: NavItem[] = [
     {
         // The pickers read plants, shifts, pumps and drivers, which need master data access.
         to: "/planning",
+        group: "Operations",
         label: "Planning",
         icon: LuCalendarDays,
         permissions: [PERMISSIONS.masterDataView],
@@ -51,12 +59,14 @@ export const navigation: NavItem[] = [
     {
         // Finding a site needs the customer and site lists, which are master data.
         to: "/surveys",
+        group: "Sales",
         label: "Surveys",
         icon: LuMapPinned,
         permissions: [PERMISSIONS.siteSurveysView, PERMISSIONS.masterDataView],
     },
     {
         to: "/pricing",
+        group: "Finance",
         label: "Pricing",
         icon: LuTags,
         permissions: [],
@@ -69,12 +79,14 @@ export const navigation: NavItem[] = [
     },
     {
         to: "/operator",
+        group: "Operations",
         label: "Batching",
         icon: LuTruck,
         permissions: [PERMISSIONS.batchesManage, PERMISSIONS.dashboardsView],
     },
     {
         to: "/quality",
+        group: "Operations",
         label: "Quality",
         icon: LuFlaskConical,
         permissions: [PERMISSIONS.returnsQc],
@@ -82,6 +94,7 @@ export const navigation: NavItem[] = [
     {
         // Everyone with master data access can look; customers.manage is needed to change anything.
         to: "/customers",
+        group: "Sales",
         label: "Customers",
         icon: LuBuilding2,
         permissions: [PERMISSIONS.masterDataView],
@@ -89,6 +102,7 @@ export const navigation: NavItem[] = [
     {
         // Managing reps and their logins is for sales managers.
         to: "/sales-reps",
+        group: "Sales",
         label: "Sales reps",
         icon: LuBriefcase,
         permissions: [PERMISSIONS.masterDataView, PERMISSIONS.customersAssign],
@@ -96,6 +110,7 @@ export const navigation: NavItem[] = [
     {
         // Everyone with master data access can look; plants.manage is needed to change anything.
         to: "/plants",
+        group: "Setup",
         label: "Plants",
         icon: LuFactory,
         permissions: [PERMISSIONS.masterDataView],
@@ -103,6 +118,7 @@ export const navigation: NavItem[] = [
     {
         // Everyone with master data access can look; fleet.manage is needed to change anything.
         to: "/fleet",
+        group: "Setup",
         label: "Fleet",
         icon: LuCarFront,
         permissions: [PERMISSIONS.masterDataView],
@@ -110,6 +126,7 @@ export const navigation: NavItem[] = [
     {
         // Everyone with master data access can look; Technical edits products and materials, Accounts edits charges.
         to: "/catalogue",
+        group: "Setup",
         label: "Catalogue",
         icon: LuPackage,
         permissions: [PERMISSIONS.masterDataView],
@@ -117,6 +134,7 @@ export const navigation: NavItem[] = [
     {
         // Assigning plants reads the plant list, which is master data.
         to: "/users",
+        group: "Setup",
         label: "Users",
         icon: LuUsers,
         permissions: [PERMISSIONS.usersManage, PERMISSIONS.masterDataView],
