@@ -23,6 +23,7 @@ import { Quality } from "@/pages/Quality";
 import { SalesReps } from "@/pages/SalesReps";
 import { Settings } from "@/pages/Settings";
 import { AuditLog } from "@/pages/AuditLog";
+import { Platform } from "@/pages/Platform";
 import { Roles } from "@/pages/Roles";
 import { Users } from "@/pages/Users";
 
@@ -63,6 +64,7 @@ export default function App() {
                         <Route path="roles" element={<Roles />} />
                         <Route path="audit" element={<AuditLog />} />
                         <Route path="settings" element={<Settings />} />
+                        <Route path="platform" element={<Platform />} />
                     </Route>
                     <Route
                         path="*"

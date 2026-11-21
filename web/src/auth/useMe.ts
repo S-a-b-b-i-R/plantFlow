@@ -13,7 +13,12 @@ export function useMe() {
         queryFn: () => api<Me>("/api/me"),
         enabled: !!firebaseUser,
         retry: false,
+        // Keep checking while someone waits for approval or for their company to be reactivated.
         refetchInterval: (query) =>
-            query.state.data?.status === "Pending" ? 15_000 : false,
+            query.state.data?.status === "Pending"
+                ? 15_000
+                : query.state.data?.companySuspended
+                  ? 60_000
+                  : false,
     });
 }

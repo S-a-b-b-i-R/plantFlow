@@ -10,6 +10,10 @@ export interface Me {
     tenantName: string;
     tenantSlug: string;
     permissions: string[];
+    // False while someone has signed in but not joined a company yet.
+    hasCompany: boolean;
+    // The platform admin paused this company: no screens open until it is reactivated.
+    companySuspended: boolean;
 }
 
 // A pour step against its plan. Delay is null until the step is due.

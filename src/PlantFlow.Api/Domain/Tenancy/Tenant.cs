@@ -3,6 +3,11 @@ using PlantFlow.Api.Domain.Common;
 namespace PlantFlow.Api.Domain.Tenancy;
 
 public enum TenantStatus { Active, Suspended }
+
+// How new people get into a company. Only a join code today; single sign-on (a client's own identity
+// provider, matched to the company) is meant to become a second value here, so people who joined by
+// code keep working when a company moves to SSO.
+public enum JoinMethod { Code }
 public enum VolumeUnit { Cft, M3 }
 public enum SurveyRequirement { Off, PumpJobs, All }
 
@@ -12,6 +17,11 @@ public class Tenant : AuditableEntity
     public required string Name { get; set; }
     public required string Slug { get; set; }
     public TenantStatus Status { get; set; } = TenantStatus.Active;
+
+    public JoinMethod JoinMethod { get; set; } = JoinMethod.Code;
+    // Eight characters without look-alikes (see JoinCodes). Null until first shown, then always set.
+    public string? JoinCode { get; set; }
+    public DateTime? JoinCodeRenewedUtc { get; set; }
 
     // Display unit only. Volumes are always stored in CFT.
     public VolumeUnit VolumeUnit { get; set; } = VolumeUnit.Cft;

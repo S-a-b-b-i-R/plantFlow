@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PlantFlow.Api.Data;
+using PlantFlow.Api.Domain.Tenancy;
 using PlantFlow.Api.Infrastructure;
 
 namespace PlantFlow.Api.Controllers;
@@ -9,7 +10,7 @@ namespace PlantFlow.Api.Controllers;
 public record MeResponse(
     Guid Id, string Email, string? DisplayName, string Status,
     bool IsPlatformAdmin, Guid TenantId, string TenantName, string TenantSlug,
-    IReadOnlyList<string> Permissions);
+    IReadOnlyList<string> Permissions, bool HasCompany = false, bool CompanySuspended = false);
 
 [ApiController]
 [Route("api/me")]
@@ -32,6 +33,8 @@ public class MeController(PlantFlowDbContext db, ICurrentUser currentUser) : Con
         return new MeResponse(
             user.Id, user.Email, user.DisplayName, user.Status.ToString(),
             user.IsPlatformAdmin, user.TenantId, user.Tenant.Name, user.Tenant.Slug,
-            User.FindAll(PlantFlowClaims.Permission).Select(c => c.Value).Order().ToList());
+            User.FindAll(PlantFlowClaims.Permission).Select(c => c.Value).Order().ToList(),
+            user.TenantId != SystemTenant.Id,
+            User.HasClaim(PlantFlowClaims.CompanySuspended, "true"));
     }
 }

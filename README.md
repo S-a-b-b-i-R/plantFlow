@@ -2,7 +2,7 @@
 
 Multi-tenant operations platform for ready-mix concrete companies: orders, pricing, shift planning, batching and dispatch, returns and quality control, and live dashboards.
 
-> **Status: in active development.** The API covers the full flow from master data to billing, and the React app already runs the plant floor: a live operations board, a batching console, the quality screen, the orders area (create, approve, confirm, bill) and the pricing area (recipes, costs, selling prices, their approvals, the cost and margin report and the pricing rules). Shift planning screens are next. See [Roadmap](#roadmap).
+> **Status: in active development.** The API covers the full flow from master data to billing, and the React app already runs the plant floor: a live operations board, a batching console, the quality screen, the orders area (create, approve, confirm, bill) and the pricing area (recipes, costs, selling prices, their approvals, the cost and margin report and the pricing rules). A setup checklist for new companies is next. See [Roadmap](#roadmap).
 
 PlantFlow is an independent portfolio project, designed from public domain knowledge in [`docs/domain-spec-v4.md`](docs/domain-spec-v4.md). All data is synthetic.
 
@@ -69,7 +69,8 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 | Catalogue screen: products, materials and service charges, edited by Technical and Accounts       | Done    |
 | Settings screen: company rules by section, reasons for billing changes, time zone fixed after orders | Done    |
 | Audit log screen: filter by company day, person, record and text; CSV export (audited, 10,000 rows max) | Done    |
-| React screens: shift planning                                                                        | Planned |
+| Company onboarding: platform console (create, suspend with a reason, place first Admin), join codes for staff | Done    |
+| Setup checklist for a new company                                                                    | Planned |
 | Quarterly volume targets, customer volume ledger                                                     | Planned |
 
 ## Architecture
@@ -94,6 +95,8 @@ Decisions worth knowing about:
 - **The API is the source of truth for access.** Roles and permissions are loaded from the database on each request through a claims transformation, cached for 60 seconds and cleared the moment an admin changes anything. A disabled user loses access immediately. The web app only hides what the API would refuse anyway.
 - **Deny beats grant.** Effective permissions are the role's permissions, plus the user's own grants, minus the user's explicit denies.
 - **Admins can't lock themselves out.** Changes to your own status, roles or permissions are rejected, the company always keeps one active Admin, and the Admin role always has every permission and can't be edited.
+- **People join a company with its join code** and wait for its Admin's approval. The code is 8 characters without look-alikes, renewable by an Admin, and wrong guesses are rate-limited. Joining goes through a per-company join method so single sign-on can be added for a client later without moving existing users.
+- **A suspended company loses access at once**, checked on every request, and keeps all its data.
 - **Built-in roles keep a fixed key.** Companies can rename them, and new permissions still reach them by key.
 - **Billing logic lives in one service.** `DeliveredQuantity` is the single place that turns loads and returns into a billed quantity, so a change to the rules cannot leave two code paths disagreeing.
 - **Times are stored in UTC and shown in plant time.** Shifts and pours are planned in the plant's local time, and each company sets its offset.

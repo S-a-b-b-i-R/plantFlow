@@ -15,6 +15,9 @@ public class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         b.Property(x => x.Slug).HasMaxLength(60);
         b.HasIndex(x => x.Slug).IsUnique();
         b.Property(x => x.Status).HasConversion<string>().HasMaxLength(30);
+        b.Property(x => x.JoinMethod).HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.JoinCode).HasMaxLength(8);
+        b.HasIndex(x => x.JoinCode).IsUnique().HasFilter("[JoinCode] IS NOT NULL");
         b.Property(x => x.VolumeUnit).HasConversion<string>().HasMaxLength(10);
         b.Property(x => x.RequireSurveyBeforePlanning).HasConversion<string>().HasMaxLength(30);
         b.Property(x => x.PumpFreeAboveCft).HasPrecision(12, 2);
@@ -34,6 +37,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         b.Property(x => x.Email).HasMaxLength(320);
         b.Property(x => x.DisplayName).HasMaxLength(200);
         b.Property(x => x.Status).HasConversion<string>().HasMaxLength(30);
+        b.Property(x => x.JoinedVia).HasConversion<string>().HasMaxLength(20);
         b.HasIndex(x => x.FirebaseUid).IsUnique();
         b.HasIndex(x => new { x.TenantId, x.Email }).IsUnique();
         b.HasOne(x => x.Tenant).WithMany().HasForeignKey(x => x.TenantId)

@@ -55,8 +55,13 @@ public class PlantFlowClaimsTransformation(
             identity.AddClaim(new Claim(PlantFlowClaims.PlatformAdmin, "true"));
         }
 
+        // A suspended company's people get no permissions, checked on every request so it applies at once.
+        var suspended = !user.IsPlatformAdmin && await db.Tenants.AsNoTracking()
+            .AnyAsync(t => t.Id == user.TenantId && t.Status == TenantStatus.Suspended);
+        if (suspended) identity.AddClaim(new Claim(PlantFlowClaims.CompanySuspended, "true"));
+
         // Only Active users get permissions; everyone else gets none.
-        if (user.Status == UserStatus.Active)
+        if (user.Status == UserStatus.Active && !suspended)
         {
             foreach (var permission in await permissions.GetEffectivePermissionsAsync(user.Id, user.TenantId))
             {

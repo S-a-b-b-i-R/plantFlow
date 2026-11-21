@@ -8,6 +8,7 @@ import {
     tabRowClass,
 } from "@/components/orders/styles";
 import { Skeleton } from "@/components/ui/skeleton";
+import { JoinCodeCard } from "@/components/users/JoinCodeCard";
 import { UserPanel } from "@/components/users/UserPanel";
 import { useUsers } from "@/components/users/useUsers";
 import { initialsOf } from "@/lib/format";
@@ -50,11 +51,13 @@ export function Users() {
             <header>
                 <h1 className="display text-4xl leading-none">Users</h1>
                 <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                    Approve people who sign up, give them roles and plants, and
-                    disable accounts when someone leaves. The company always
-                    keeps at least one active Admin.
+                    Approve people who join with the code, give them roles and
+                    plants, and disable accounts when someone leaves. The
+                    company always keeps at least one active Admin.
                 </p>
             </header>
+
+            <JoinCodeCard />
 
             <div role="tablist" aria-label="Users" className={tabRowClass}>
                 {tabs.map((t) => (

@@ -6,6 +6,9 @@ namespace PlantFlow.Api.Domain.Identity;
 
 public enum UserStatus { Pending, Active, Rejected, Disabled }
 
+// Assigned: placed by the platform admin. Code: entered the company's join code.
+public enum JoinedVia { Assigned, Code }
+
 public class User : AuditableEntity, ITenantOwned
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
@@ -16,6 +19,8 @@ public class User : AuditableEntity, ITenantOwned
     public string? DisplayName { get; set; }
     public bool IsPlatformAdmin { get; set; }
     public UserStatus Status { get; set; } = UserStatus.Pending;
+    // How this person got into their company. SSO is meant to join this list later.
+    public JoinedVia JoinedVia { get; set; } = JoinedVia.Assigned;
     public Guid? ApprovedBy { get; set; }
     public DateTime? ApprovedAtUtc { get; set; }
     public List<UserRole> UserRoles { get; set; } = [];

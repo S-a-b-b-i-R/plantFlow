@@ -54,7 +54,9 @@ export function Gate() {
         );
     }
 
-    if (me.data.status !== "Active") return <Waiting me={me.data} />;
+    if (me.data.status !== "Active" || me.data.companySuspended) {
+        return <Waiting me={me.data} />;
+    }
 
     return <Outlet />;
 }
