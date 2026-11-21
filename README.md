@@ -46,7 +46,7 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 | Multi-tenancy: shared database, `TenantId` on every tenant-owned row, EF Core global query filters   | Done    |
 | Google sign-in with Firebase, API validates Firebase ID tokens                                       | Done    |
 | New users start `Pending`; a platform admin assigns them to a company, a company admin approves them | Done    |
-| Roles and permissions: 11 default roles, 45 permission keys, per-user grants and denies              | Done    |
+| Roles and permissions: 11 default roles, 46 permission keys, per-user grants and denies              | Done    |
 | Audit log for user, role, permission, order, production and returns changes                          | Done    |
 | Master data: plants and shifts, customers and sites, vehicles and drivers, products, materials       | Done    |
 | Mix designs with approval, material and overhead costs, price master, floor price and margin         | Done    |
@@ -64,6 +64,7 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 | Plants screen: plants, shifts and batching plants, with a warning before deactivating one in use    | Done    |
 | Customers, sites and site distances, and a Sales reps screen that links reps to logins               | Done    |
 | Customer ownership: one rep per customer, opens up after N days without a confirmed order, badge     | Done    |
+| Fleet screen: mixers with drivers, pumps with crews of pump operators, guarded while in use        | Done    |
 | React screens: shift planning and administration                                                     | Planned |
 | Quarterly volume targets, customer volume ledger                                                     | Planned |
 

@@ -53,7 +53,7 @@ public static class DefaultRoles
         [
             MasterDataView, OrdersView, DeliveriesTrack, DeliveriesPlanApprove, DeliveriesPlanOverride,
             BatchesManage, ReturnsManage, TargetsView, DashboardsView, SiteSurveysView, SiteSurveysApprove,
-            PlantsManage
+            PlantsManage, FleetManage
         ],
 
         ["Management"] = [OrdersView, OrdersApproveManagement, CostsApprove, DeliveriesTrack, TargetsView, DashboardsView]

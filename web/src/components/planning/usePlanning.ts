@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Paged } from "@/lib/orders";
 import type {
-    DriverOption,
+    CrewOption,
     LineToPlan,
     PlantShift,
     PumpOption,
@@ -54,11 +54,12 @@ export const usePumps = (plantId: string | undefined) =>
         enabled: !!plantId,
     });
 
-export const useDrivers = () =>
+// The pump's active operators.
+export const usePumpCrew = (pumpId: string) =>
     useQuery({
-        queryKey: ["drivers", "active"],
-        queryFn: () =>
-            api<Paged<DriverOption>>("/api/drivers?status=Active&pageSize=100"),
+        queryKey: ["planning", "crew", pumpId],
+        queryFn: () => api<CrewOption[]>(`/api/vehicles/${pumpId}/crew`),
+        enabled: !!pumpId,
     });
 
 type Call = { url: string; method?: "POST" | "PUT" | "DELETE"; body?: unknown };

@@ -63,7 +63,7 @@ public class PlantFlowDbContext : DbContext
     public DbSet<OrderCharge> OrderCharges => Set<OrderCharge>();
     public DbSet<OrderAdjustment> OrderAdjustments => Set<OrderAdjustment>();
     public DbSet<SiteSurvey> SiteSurveys => Set<SiteSurvey>();
-    public DbSet<PumpCrewMember> PumpCrewMembers => Set<PumpCrewMember>();
+    public DbSet<PumpOperator> PumpOperators => Set<PumpOperator>();
     public DbSet<ShiftPlan> ShiftPlans => Set<ShiftPlan>();
     public DbSet<Pour> Pours => Set<Pour>();
     public DbSet<SiteSurveyImage> SiteSurveyImages => Set<SiteSurveyImage>();

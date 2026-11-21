@@ -70,18 +70,6 @@ public class SiteSurveyImage : ITenantOwned
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
-// A labourer in the team that assembles and disassembles a pump.
-public class PumpCrewMember : ITenantOwned
-{
-    public Guid Id { get; set; } = Guid.CreateVersion7();
-    public Guid TenantId { get; set; }
-
-    public Guid VehicleId { get; set; }
-    public Vehicle Vehicle { get; set; } = null!;
-
-    public string Name { get; set; } = "";
-}
-
 public enum ShiftPlanStatus { Draft, Submitted, Approved }
 
 // Everything one plant produces and pours in one shift on one date. The plant head approves it as a whole.
@@ -131,9 +119,9 @@ public class Pour : ITenantOwned
     public Guid? PumpId { get; set; }
     public Vehicle? Pump { get; set; }
 
-    // Overrides the pump's default driver.
+    // The operator leading this pour, from the pump's crew. Optional.
     public Guid? OperatorId { get; set; }
-    public Driver? Operator { get; set; }
+    public PumpOperator? Operator { get; set; }
 
     public string? CrewNotes { get; set; }
 

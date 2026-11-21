@@ -95,6 +95,8 @@ public class PlanReasonRequest
 public class ShiftPlansController(
     PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit, PourPlanner planner) : ControllerBase
 {
+    public const string OperatorNotInCrew = "Choose an operator from this pump's crew.";
+
     private static readonly Expression<Func<ShiftPlan, ShiftPlanSummaryDto>> ToSummary = p => new ShiftPlanSummaryDto(
         p.Id, p.PlantId, p.Plant.Code, p.Date, p.ShiftId, p.Shift.Name, p.Shift.StartTime, p.Shift.EndTime, p.Status,
         p.Pours.Count(), p.Pours.Sum(x => (decimal?)x.PlannedCft) ?? 0m, p.ReturnReason, p.SubmittedAtUtc, p.ApprovedAtUtc);
@@ -387,10 +389,11 @@ public class ShiftPlansController(
             }
         }
 
-        if (r.OperatorId is { } operatorId && pour?.OperatorId != operatorId
-            && !await db.Drivers.AnyAsync(d => d.Id == operatorId && d.Status == ActiveStatus.Active, cancellationToken))
+        if (r.OperatorId is { } operatorId && (pour?.OperatorId != operatorId || pour?.PumpId != r.PumpId)
+            && (pump is null || !await db.PumpOperators.AnyAsync(
+                o => o.Id == operatorId && o.PumpId == pump.Id && o.Status == ActiveStatus.Active, cancellationToken)))
         {
-            return Bad("Choose an active driver of this company as the operator.");
+            return Bad(OperatorNotInCrew);
         }
 
         if ((r.PumpLeaveAt is not null && pump is null)
@@ -518,10 +521,8 @@ public class ShiftPlansController(
                 p.PlannedStart,
                 p.PumpId,
                 PumpCode = p.Pump != null ? p.Pump.Code : null,
-                OperatorId = p.OperatorId ?? (p.Pump != null ? p.Pump.DefaultDriverId : (Guid?)null),
-                OperatorName = p.Operator != null
-                    ? p.Operator.Name
-                    : (p.Pump != null && p.Pump.DefaultDriver != null ? p.Pump.DefaultDriver.Name : null),
+                p.OperatorId,
+                OperatorName = p.Operator != null ? p.Operator.Name : null,
                 p.CrewNotes,
                 p.PumpLeaveAt,
                 p.FirstTruckLeaveAt,
@@ -532,8 +533,9 @@ public class ShiftPlansController(
             .ToListAsync(cancellationToken);
 
         var pumpIds = rows.Where(r => r.PumpId != null).Select(r => r.PumpId!.Value).Distinct().ToList();
-        var crew = await db.PumpCrewMembers.AsNoTracking().Where(c => pumpIds.Contains(c.VehicleId))
-            .OrderBy(c => c.Name).Select(c => new { c.VehicleId, c.Name }).ToListAsync(cancellationToken);
+        var crew = await db.PumpOperators.AsNoTracking()
+            .Where(o => o.PumpId != null && pumpIds.Contains(o.PumpId.Value) && o.Status == ActiveStatus.Active)
+            .OrderBy(o => o.Name).Select(o => new { VehicleId = o.PumpId!.Value, o.Name }).ToListAsync(cancellationToken);
 
         return rows.Select(r => new PourDto(
             r.Id, r.OrderId, r.OrderNumber, r.CustomerName, r.SiteName, r.OrderLineId, r.ProductCode, r.PourMethod,

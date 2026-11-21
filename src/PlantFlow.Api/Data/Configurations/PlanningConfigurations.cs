@@ -54,19 +54,6 @@ public class SiteSurveyImageConfiguration : IEntityTypeConfiguration<SiteSurveyI
     }
 }
 
-public class PumpCrewMemberConfiguration : IEntityTypeConfiguration<PumpCrewMember>
-{
-    public void Configure(EntityTypeBuilder<PumpCrewMember> builder)
-    {
-        builder.HasKey(c => c.Id);
-        builder.Property(c => c.Name).HasMaxLength(100).IsRequired();
-        builder.HasIndex(c => new { c.VehicleId, c.Name }).IsUnique();
-
-        builder.HasOne(c => c.Vehicle).WithMany().HasForeignKey(c => c.VehicleId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<Tenant>().WithMany().HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
 public class ShiftPlanConfiguration : IEntityTypeConfiguration<ShiftPlan>
 {
     public void Configure(EntityTypeBuilder<ShiftPlan> builder)

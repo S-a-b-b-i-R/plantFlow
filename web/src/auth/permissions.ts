@@ -15,6 +15,7 @@ export const PERMISSIONS = {
     customersManage: "customers.manage",
     customersAssign: "customers.assign",
     customersVat: "customers.vat",
+    fleetManage: "fleet.manage",
     pricesView: "prices.view",
     pricesEdit: "prices.edit",
     pricesApprove: "prices.approve",

@@ -10,7 +10,8 @@ using PlantFlow.Api.Services;
 
 namespace PlantFlow.Api.Controllers;
 
-public record DriverDto(Guid Id, string Name, string? Phone, ActiveStatus Status);
+// MixerCodes: the transit mixers this driver is the usual driver of.
+public record DriverDto(Guid Id, string Name, string? Phone, ActiveStatus Status, List<string> MixerCodes);
 
 public class DriverRequest
 {
@@ -27,7 +28,8 @@ public class DriverRequest
 [Route("api/drivers")]
 public class DriversController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
-    private static readonly Expression<Func<Driver, DriverDto>> ToDto = d => new DriverDto(d.Id, d.Name, d.Phone, d.Status);
+    private Expression<Func<Driver, DriverDto>> ToDto => d => new DriverDto(d.Id, d.Name, d.Phone, d.Status,
+        db.Vehicles.Where(v => v.DefaultDriverId == d.Id).OrderBy(v => v.Code).Select(v => v.Code).ToList());
 
     // ?search= matches name or phone.  ?status=.  ?sort=name, "-name" for descending.
     [HttpGet]
@@ -60,7 +62,7 @@ public class DriversController(PlantFlowDbContext db, ICurrentUser currentUser, 
     }
 
     [HttpPost]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.FleetManage)]
     public async Task<ActionResult<DriverDto>> Create(DriverRequest request, CancellationToken cancellationToken)
     {
         var tenantId = currentUser.TenantId!.Value;
@@ -81,7 +83,7 @@ public class DriversController(PlantFlowDbContext db, ICurrentUser currentUser, 
     }
 
     [HttpPut("{id:guid}")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.FleetManage)]
     public async Task<IActionResult> Update(Guid id, DriverRequest request, CancellationToken cancellationToken)
     {
         var driver = await db.Drivers.FirstOrDefaultAsync(d => d.Id == id, cancellationToken);

@@ -16,13 +16,13 @@ public partial class PourPlanningTests(ApiFactory factory)
         OrderWorld W, Guid Morning, Guid Afternoon, Guid Night, Guid Pump, Guid Pump2, Guid PumpLine, Guid ChuteLine, Guid Mixer,
         Guid OrderId);
 
-    private static async Task<Fixture> SetupAsync(HttpClient admin, bool withSurvey = true, Guid? pumpDriver = null)
+    private static async Task<Fixture> SetupAsync(HttpClient admin, bool withSurvey = true)
     {
         var w = await CreateOrderWorldAsync(admin);
         var morning = await CreateShiftAsync(admin, w.PlantId, "Morning", "06:00:00", "14:00:00");
         var afternoon = await CreateShiftAsync(admin, w.PlantId, "Afternoon", "14:00:00", "22:00:00");
         var night = await CreateShiftAsync(admin, w.PlantId, "Night", "22:00:00", "06:00:00");
-        var pump = await CreatePumpAsync(admin, w.PlantId, "PMP1", pumpDriver);
+        var pump = await CreatePumpAsync(admin, w.PlantId, "PMP1");
         var pump2 = await CreatePumpAsync(admin, w.PlantId, "PMP2", assemblyMinutes: 60);
         var mixer = await CreateMixerAsync(admin, w.PlantId, "MX1");
 
@@ -46,10 +46,10 @@ public partial class PourPlanningTests(ApiFactory factory)
         return (await response.Content.ReadFromJsonAsync<PlantShiftDto>(ApiFactory.Json))!.Id;
     }
 
-    private static async Task<Guid> CreatePumpAsync(HttpClient c, Guid plantId, string code, Guid? driverId = null, int? assemblyMinutes = null)
+    private static async Task<Guid> CreatePumpAsync(HttpClient c, Guid plantId, string code, int? assemblyMinutes = null)
     {
         var response = await c.PostAsJsonAsync("/api/vehicles",
-            new { plantId, code, type = "Pump", defaultDriverId = driverId, assemblyMinutes });
+            new { plantId, code, type = "Pump", assemblyMinutes });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<VehicleDto>(ApiFactory.Json))!.Id;
     }
@@ -63,11 +63,11 @@ public partial class PourPlanningTests(ApiFactory factory)
         return (await response.Content.ReadFromJsonAsync<VehicleDto>(ApiFactory.Json))!.Id;
     }
 
-    private static async Task<Guid> CreateDriverAsync(HttpClient c, string name)
+    private static async Task<Guid> CreateOperatorAsync(HttpClient c, string name, Guid? pumpId)
     {
-        var response = await c.PostAsJsonAsync("/api/drivers", new { name });
+        var response = await c.PostAsJsonAsync("/api/pump-operators", new { name, phone = "01711000000", pumpId });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<DriverDto>(ApiFactory.Json))!.Id;
+        return (await response.Content.ReadFromJsonAsync<PumpOperatorDto>(ApiFactory.Json))!.Id;
     }
 
     private static async Task<ShiftPlanDetailDto> PlanAsync(HttpClient c, Guid plantId, string date, Guid shiftId)
@@ -314,37 +314,32 @@ public partial class PourPlanningTests(ApiFactory factory)
         var company = await factory.CreateCompanyAsync();
         var other = await factory.CreateCompanyAsync();
         var admin = company.Admin.Client;
-        var rahim = await CreateDriverAsync(admin, "Rahim");
-        var karim = await CreateDriverAsync(admin, "Karim");
-        var fx = await SetupAsync(admin, pumpDriver: rahim);
+        var fx = await SetupAsync(admin);
 
-        // The named labour team.
-        var put = await admin.PutAsJsonAsync($"/api/vehicles/{fx.Pump}/crew", new { names = new[] { "Jewel", "Hasan" } });
-        Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
-        Assert.Equal(["Hasan", "Jewel"], await admin.GetFromJsonAsync<List<string>>($"/api/vehicles/{fx.Pump}/crew", ApiFactory.Json));
-
-        var duplicate = await admin.PutAsJsonAsync($"/api/vehicles/{fx.Pump}/crew", new { names = new[] { "Hasan", "hasan" } });
-        Assert.Equal(HttpStatusCode.BadRequest, duplicate.StatusCode);
-
-        var mixer = await admin.PostAsJsonAsync("/api/vehicles",
-            new { plantId = fx.W.PlantId, code = "TM1", type = "TransitMixer", capacityCft = 8m });
-        var mixerId = (await mixer.Content.ReadFromJsonAsync<VehicleDto>(ApiFactory.Json))!.Id;
-        var notAPump = await admin.PutAsJsonAsync($"/api/vehicles/{mixerId}/crew", new { names = new[] { "Hasan" } });
-        Assert.Equal(HttpStatusCode.BadRequest, notAPump.StatusCode);
+        // The crew is the pump's operators.
+        var jewel = await CreateOperatorAsync(admin, "Jewel", fx.Pump);
+        await CreateOperatorAsync(admin, "Hasan", fx.Pump);
+        var karim = await CreateOperatorAsync(admin, "Karim", fx.Pump2);
+        var crew = await admin.GetFromJsonAsync<List<PumpOperatorDto>>($"/api/vehicles/{fx.Pump}/crew", ApiFactory.Json);
+        Assert.Equal(["Hasan", "Jewel"], crew!.Select(o => o.Name));
 
         var plan = await PlanAsync(admin, fx.W.PlantId, "2026-06-01", fx.Morning);
 
-        // The operator is the pump's default driver, and the crew is the pump's team.
+        // With no operator picked, the pour has none, and its crew is the pump's operators.
         var first = await ReadPourAsync(await PourAsync(admin, plan.Plan.Id, fx.PumpLine, 10m, "09:00:00", fx.Pump));
-        Assert.Equal("Rahim", first.OperatorName);
+        Assert.Null(first.OperatorName);
         Assert.Equal(["Hasan", "Jewel"], first.Crew);
 
-        // A pour can use another operator and add notes about its crew.
+        // The operator must come from that pump's crew.
+        var wrongCrew = await PourAsync(admin, plan.Plan.Id, fx.PumpLine, 10m, "10:00:00", fx.Pump2, operatorId: jewel);
+        Assert.Equal(HttpStatusCode.BadRequest, wrongCrew.StatusCode);
+        Assert.Contains(ShiftPlansController.OperatorNotInCrew, await wrongCrew.Content.ReadAsStringAsync());
+
         var second = await ReadPourAsync(await PourAsync(
-            admin, plan.Plan.Id, fx.PumpLine, 10m, "10:00:00", fx.Pump2, operatorId: karim, crewNotes: "Four labourers from team B"));
+            admin, plan.Plan.Id, fx.PumpLine, 10m, "10:00:00", fx.Pump2, operatorId: karim, crewNotes: "Two extra labourers"));
         Assert.Equal("Karim", second.OperatorName);
-        Assert.Empty(second.Crew);
-        Assert.Equal("Four labourers from team B", second.CrewNotes);
+        Assert.Equal(["Karim"], second.Crew);
+        Assert.Equal("Two extra labourers", second.CrewNotes);
 
         var detail = (await PlanDetailAsync(admin, plan.Plan.Id))!;
         Assert.Equal(2, detail.Pours.Count);

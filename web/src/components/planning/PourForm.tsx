@@ -21,7 +21,7 @@ import {
     type ShiftPlanDetail,
 } from "@/lib/planning";
 import { cn } from "@/lib/utils";
-import { useDrivers, usePumps } from "./usePlanning";
+import { usePumpCrew, usePumps } from "./usePlanning";
 
 // The line being planned: from the list of orders to plan, or taken from the pour being edited.
 export type PourTarget = {
@@ -54,7 +54,6 @@ export function PourForm({
     const me = useMe().data!;
     const queryClient = useQueryClient();
     const pumps = usePumps(target.method === "Pump" ? plantId : undefined);
-    const drivers = useDrivers();
 
     const byPump = target.method === "Pump";
     const [shiftId, setShiftId] = useState(choices[0]?.shift.id ?? "");
@@ -70,6 +69,7 @@ export function PourForm({
     );
     const [pumpId, setPumpId] = useState(pour?.pumpId ?? "");
     const [operatorId, setOperatorId] = useState(pour?.operatorId ?? "");
+    const crew = usePumpCrew(pumpId);
     const [crewNotes, setCrewNotes] = useState(pour?.crewNotes ?? "");
     const [notes, setNotes] = useState(pour?.notes ?? "");
 
@@ -258,7 +258,11 @@ export function PourForm({
                         <select
                             className={inputClass}
                             value={pumpId}
-                            onChange={(e) => setPumpId(e.target.value)}
+                            onChange={(e) => {
+                                // The operator comes from the pump's crew, so a new pump clears it.
+                                setPumpId(e.target.value);
+                                setOperatorId("");
+                            }}
                         >
                             <option value="">Choose a pump</option>
                             {usablePumps.map((p) => (
@@ -273,17 +277,22 @@ export function PourForm({
                     </Field>
                     <Field
                         label="Operator"
-                        hint="Leave it to use the pump's usual driver."
+                        hint={
+                            pumpId && crew.data?.length === 0
+                                ? "This pump has no crew yet. Add operators on the Fleet screen."
+                                : "Optional. Picked from the pump's crew."
+                        }
                     >
                         <select
                             className={inputClass}
                             value={operatorId}
                             onChange={(e) => setOperatorId(e.target.value)}
+                            disabled={!pumpId}
                         >
-                            <option value="">Pump's usual driver</option>
-                            {(drivers.data?.items ?? []).map((d) => (
-                                <option key={d.id} value={d.id}>
-                                    {d.name}
+                            <option value="">No operator named</option>
+                            {(crew.data ?? []).map((o) => (
+                                <option key={o.id} value={o.id}>
+                                    {o.name}
                                 </option>
                             ))}
                         </select>
