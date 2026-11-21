@@ -42,7 +42,8 @@ public class SiteRequest
 }
 
 [ApiController]
-public class SitesController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
+public class SitesController(
+    PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit, CustomerOwnership ownership) : ControllerBase
 {
     private static readonly Expression<Func<Site, SiteDto>> ToDto = s => new SiteDto(
         s.Id, s.CustomerId, s.Name, s.Address, s.Latitude, s.Longitude,
@@ -55,7 +56,8 @@ public class SitesController(PlantFlowDbContext db, ICurrentUser currentUser, Au
         Guid customerId, [FromQuery] PageQuery paging, [FromQuery] ActiveStatus? status,
         CancellationToken cancellationToken)
     {
-        if (!await db.Customers.AnyAsync(c => c.Id == customerId, cancellationToken)) return NotFound();
+        var scope = await ownership.ScopeAsync(User, cancellationToken);
+        if (!await ownership.CanSeeAsync(customerId, scope, cancellationToken)) return NotFound();
 
         var query = db.Sites.AsNoTracking().Where(s => s.CustomerId == customerId);
 
@@ -96,7 +98,8 @@ public class SitesController(PlantFlowDbContext db, ICurrentUser currentUser, Au
     [HasPermission(Permissions.CustomersManage)]
     public async Task<ActionResult<SiteDto>> Create(Guid customerId, SiteRequest request, CancellationToken cancellationToken)
     {
-        if (!await db.Customers.AnyAsync(c => c.Id == customerId, cancellationToken)) return NotFound();
+        var scope = await ownership.ScopeAsync(User, cancellationToken);
+        if (!await ownership.CanWorkAsync(customerId, scope, cancellationToken)) return NotFound();
 
         var problem = await CheckAsync(request, customerId, null, cancellationToken);
         if (problem is not null) return problem;
@@ -130,6 +133,9 @@ public class SitesController(PlantFlowDbContext db, ICurrentUser currentUser, Au
     {
         var site = await db.Sites.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
         if (site is null) return NotFound();
+
+        var scope = await ownership.ScopeAsync(User, cancellationToken);
+        if (!await ownership.CanWorkAsync(site.CustomerId, scope, cancellationToken)) return NotFound();
 
         var problem = await CheckAsync(request, site.CustomerId, id, cancellationToken);
         if (problem is not null) return problem;

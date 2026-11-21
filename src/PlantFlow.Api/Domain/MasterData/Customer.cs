@@ -18,6 +18,10 @@ public class Customer : AuditableEntity, ITenantOwned
     public Guid? SalesRepId { get; set; }
     public SalesRep? SalesRep { get; set; }
 
+    // When the current owner's clock started: assignment or their last confirmed order. With no owner,
+    // when the customer was released (or created without one). See CustomerOwnership.
+    public DateTime OwnershipStartedUtc { get; set; } = DateTime.UtcNow;
+
     public ActiveStatus Status { get; set; } = ActiveStatus.Active;
 
     public List<Site> Sites { get; set; } = [];

@@ -20,6 +20,33 @@ export interface Customer {
     status: ActiveStatus;
     siteCount: number;
     vatExempt: boolean;
+    // Open: no owner, or the owner's days ran out. Any rep can sell to it.
+    isOpen: boolean;
+    // When the owner's days run out. Null with no owner or when the company setting is off.
+    opensAtUtc: string | null;
+}
+
+// Mine = owned by the signed-in rep. Open = any rep can take it with a confirmed order.
+export type OwnershipFilter = "All" | "Mine" | "Open";
+
+// One line about who owns the customer and for how long.
+export function ownershipText(customer: Customer, myRepId: string | null) {
+    if (customer.isOpen) {
+        return customer.salesRepName
+            ? `Open: ${customer.salesRepName}'s time ran out. The first rep to get an order confirmed takes it.`
+            : "Open: the first rep to get an order confirmed takes it.";
+    }
+    const owns =
+        customer.salesRepId === myRepId
+            ? "You own"
+            : `${customer.salesRepName} owns`;
+    if (!customer.opensAtUtc) return `${owns} this customer.`;
+    const until = new Date(customer.opensAtUtc).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+    });
+    return `${owns} this customer until ${until}. Each confirmed order extends it.`;
 }
 
 export interface Site {

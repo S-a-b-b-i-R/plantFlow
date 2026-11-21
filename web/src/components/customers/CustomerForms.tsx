@@ -25,7 +25,8 @@ const emailLooksValid = (value: string) =>
     value === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 // Create or edit a customer. VAT exemption and status have their own controls.
-// Only someone who assigns reps sees the rep field; a sales rep's new customer is their own.
+// Only someone who assigns reps picks the rep, and only when adding; a sales rep's new customer is
+// their own. Changing the owner later is Change owner on the customer page.
 export function CustomerForm({
     customer,
     canAssign,
@@ -49,7 +50,7 @@ export function CustomerForm({
     );
     const [phone, setPhone] = useState(customer?.phone ?? "");
     const [email, setEmail] = useState(customer?.email ?? "");
-    const [salesRepId, setSalesRepId] = useState(customer?.salesRepId ?? "");
+    const [salesRepId, setSalesRepId] = useState("");
 
     const body = {
         code: code.trim(),
@@ -57,9 +58,11 @@ export function CustomerForm({
         type,
         phone: phone.trim() || null,
         email: email.trim() || null,
-        salesRepId: canAssign
-            ? salesRepId || null
-            : (customer?.salesRepId ?? null),
+        salesRepId: customer
+            ? customer.salesRepId
+            : canAssign
+              ? salesRepId || null
+              : null,
         status: customer?.status ?? "Active",
         vatExempt: customer?.vatExempt ?? false,
     };
@@ -133,10 +136,10 @@ export function CustomerForm({
                     className={inputClass}
                 />
             </Field>
-            {canAssign ? (
+            {canAssign && !customer ? (
                 <Field
                     label="Sales rep"
-                    hint="Who looks after this customer. Leave empty for none."
+                    hint="Who owns this customer. Leave empty to leave it open to every rep."
                 >
                     <select
                         value={salesRepId}
@@ -144,15 +147,6 @@ export function CustomerForm({
                         className={inputClass}
                     >
                         <option value="">No sales rep</option>
-                        {customer?.salesRepId &&
-                            !repOptions.some(
-                                (r) => r.id === customer.salesRepId,
-                            ) && (
-                                <option value={customer.salesRepId}>
-                                    {customer.salesRepName ?? "Current rep"}{" "}
-                                    (inactive)
-                                </option>
-                            )}
                         {repOptions.map((r) => (
                             <option key={r.id} value={r.id}>
                                 {r.name}

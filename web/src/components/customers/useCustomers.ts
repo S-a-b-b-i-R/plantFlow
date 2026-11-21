@@ -5,19 +5,25 @@ import type {
     Customer,
     LinkableUser,
     OpenOrders,
+    OwnershipFilter,
     SalesRep,
     Site,
     SiteDistance,
 } from "@/lib/customers";
 import type { Paged, PlantOption } from "@/lib/orders";
 
-export const useCustomerList = (search: string, status: StatusFilter) =>
+export const useCustomerList = (
+    search: string,
+    status: StatusFilter,
+    ownership: OwnershipFilter = "All",
+) =>
     useQuery({
-        queryKey: ["customers", "list", search, status],
+        queryKey: ["customers", "list", search, status, ownership],
         queryFn: () => {
             const query = new URLSearchParams({ pageSize: "50" });
             if (search.trim()) query.set("search", search.trim());
             if (status !== "All") query.set("status", status);
+            if (ownership !== "All") query.set("ownership", ownership);
             return api<Paged<Customer>>(`/api/customers?${query}`);
         },
     });
@@ -50,6 +56,26 @@ export const useOpenOrders = (path: string, enabled: boolean) =>
         enabled,
         staleTime: 0,
     });
+
+// How many customers opened up since this rep last looked at the open list. 0 for managers.
+export const useOpenedCount = (enabled: boolean) =>
+    useQuery({
+        queryKey: ["customers", "opened"],
+        queryFn: () => api<{ count: number }>("/api/customers/opened"),
+        enabled,
+        refetchInterval: 5 * 60_000,
+    });
+
+// The rep looked at the open customers, which clears the badge.
+export function useMarkOpenedSeen() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: () =>
+            api<void>("/api/customers/opened/seen", { method: "POST" }),
+        onSuccess: () =>
+            queryClient.setQueryData(["customers", "opened"], { count: 0 }),
+    });
+}
 
 export const useActivePlantOptions = () =>
     useQuery({

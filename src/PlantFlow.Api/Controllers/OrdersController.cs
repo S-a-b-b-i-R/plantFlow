@@ -132,8 +132,12 @@ public class CancelOrderRequest
 public class OrdersController(
     PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit,
     FloorPriceCalculator calculator, PriceFinder finder, OrderApprovalFlow flow, OrderChargeCalculator chargeCalculator,
-    OrderSurveys surveys) : ControllerBase
+    OrderSurveys surveys, CustomerOwnership ownership) : ControllerBase
 {
+    public const string NoRepLink =
+        "Your login is not linked to a sales rep. Ask a sales manager to link it before you create orders.";
+    public const string OwnRepOnly = "Your orders are always under your own sales rep.";
+
     private static readonly Expression<Func<Order, OrderSummaryDto>> ToSummary = o => new OrderSummaryDto(
         o.Id, o.Number, o.CustomerId, o.Customer.Name, o.SiteId, o.Site.Name,
         o.SalesRepId, o.SalesRep != null ? o.SalesRep.Name : null, o.PlantId, o.Plant.Code, o.RequestedDate,
@@ -493,6 +497,32 @@ public class OrdersController(
             return (null, Bad("Choose an active customer of this company."));
         }
 
+        // A sales rep's orders are their own. They can start one only for their own or an open customer,
+        // but they can keep working on an order they already have for a customer someone else now owns.
+        var scope = await ownership.ScopeAsync(User, cancellationToken);
+        Guid? salesRepId;
+        if (scope.Restricted)
+        {
+            if (existing?.CustomerId != request.CustomerId)
+            {
+                if (scope.RepId is null) return (null, Problem(title: NoRepLink, statusCode: StatusCodes.Status403Forbidden));
+                if (!await ownership.CanWorkAsync(request.CustomerId!.Value, scope, cancellationToken))
+                {
+                    return (null, Bad("Choose an active customer of this company."));
+                }
+            }
+
+            salesRepId = existing is null ? scope.RepId : existing.SalesRepId;
+            if (request.SalesRepId is { } asked && asked != salesRepId)
+            {
+                return (null, Problem(title: OwnRepOnly, statusCode: StatusCodes.Status403Forbidden));
+            }
+        }
+        else
+        {
+            salesRepId = request.SalesRepId ?? customer.SalesRepId;
+        }
+
         var siteStatus = await db.Sites.AsNoTracking()
             .Where(s => s.Id == request.SiteId && s.CustomerId == request.CustomerId)
             .Select(s => (ActiveStatus?)s.Status).FirstOrDefaultAsync(cancellationToken);
@@ -582,7 +612,7 @@ public class OrdersController(
                 line.SlumpMm ?? product.DefaultSlumpMm));
         }
 
-        return (new Prepared(request.SalesRepId ?? customer.SalesRepId, distance.Value, evaluated), null);
+        return (new Prepared(salesRepId, distance.Value, evaluated), null);
     }
 
     // What would change, and whether it is a commercial change (price, quantity, lines, distance, date, plant, customer).

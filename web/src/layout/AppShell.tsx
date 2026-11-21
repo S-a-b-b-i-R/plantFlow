@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/auth-context";
 import { canOpen, navigation } from "@/layout/navigation";
 import { useMe } from "@/auth/useMe";
 import { LuLogOut } from "react-icons/lu";
+import { OpenedBadge } from "@/components/customers/OpenedBadge";
 import { ApprovalBadge } from "@/components/surveys/ApprovalBadge";
 
 export function AppShell() {
@@ -52,6 +53,9 @@ export function AppShell() {
                                     {item.label}
                                     {item.to === "/surveys" && (
                                         <ApprovalBadge />
+                                    )}
+                                    {item.to === "/customers" && (
+                                        <OpenedBadge />
                                     )}
                                 </NavLink>
                             ))}

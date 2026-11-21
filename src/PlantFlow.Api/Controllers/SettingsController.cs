@@ -12,7 +12,7 @@ namespace PlantFlow.Api.Controllers;
 public record TenantSettingsDto(
     string Name, string Slug, VolumeUnit VolumeUnit, decimal? PumpFreeAboveCft,
     SurveyRequirement RequireSurveyBeforePlanning, int PumpRestShifts,
-    bool RequireCreditApproval, bool VatOnConcrete, int AverageSpeedKmh, int PumpAssemblyMinutes, decimal TruckLoadCft, int LateThresholdMinutes, int UtcOffsetMinutes, int ReturnWindowMinutes);
+    bool RequireCreditApproval, bool VatOnConcrete, int AverageSpeedKmh, int PumpAssemblyMinutes, decimal TruckLoadCft, int LateThresholdMinutes, int UtcOffsetMinutes, int ReturnWindowMinutes, int CustomerOwnershipDays);
 
 // What every signed-in user needs to display things. Nothing commercial.
 public record PublicSettingsDto(string Name, VolumeUnit VolumeUnit);
@@ -64,6 +64,11 @@ public class TenantSettingsRequest
 
     [Range(0, 1440)]
     public int? ReturnWindowMinutes { get; init; }
+
+    // A rep keeps a customer while they get an order confirmed at least this often. 0 = for good.
+    // Leave out to keep the current value.
+    [Range(0, 3650)]
+    public int? CustomerOwnershipDays { get; init; }
 }
 
 [ApiController]
@@ -71,7 +76,7 @@ public class TenantSettingsRequest
 public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
     private static TenantSettingsDto ToDto(Tenant t) => new(
-        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete, t.AverageSpeedKmh, t.PumpAssemblyMinutes, t.TruckLoadCft, t.LateThresholdMinutes, t.UtcOffsetMinutes, t.ReturnWindowMinutes);
+        t.Name, t.Slug, t.VolumeUnit, t.PumpFreeAboveCft, t.RequireSurveyBeforePlanning, t.PumpRestShifts, t.RequireCreditApproval, t.VatOnConcrete, t.AverageSpeedKmh, t.PumpAssemblyMinutes, t.TruckLoadCft, t.LateThresholdMinutes, t.UtcOffsetMinutes, t.ReturnWindowMinutes, t.CustomerOwnershipDays);
 
     [HttpGet]
     [HasPermission(Permissions.SettingsManage)]
@@ -115,6 +120,7 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
         if (request.LateThresholdMinutes is { } late) tenant.LateThresholdMinutes = late;
         if (request.UtcOffsetMinutes is { } offset) tenant.UtcOffsetMinutes = offset;
         if (request.ReturnWindowMinutes is { } returnWindow) tenant.ReturnWindowMinutes = returnWindow;
+        if (request.CustomerOwnershipDays is { } ownershipDays) tenant.CustomerOwnershipDays = ownershipDays;
         tenant.TruckLoadCft = request.TruckLoadCft;
 
         audit.Record(tenant.Id, "tenant.settings_changed", "Tenant", tenant.Id.ToString(),
@@ -127,7 +133,8 @@ public class SettingsController(PlantFlowDbContext db, ICurrentUser currentUser,
                 TruckLoadCftChanged = before.TruckLoadCft != tenant.TruckLoadCft,
                 LateThresholdMinutesChanged = before.LateThresholdMinutes != tenant.LateThresholdMinutes,
                 UtcOffsetMinutesChanged = before.UtcOffsetMinutes != tenant.UtcOffsetMinutes,
-                ReturnWindowMinutesChanged = before.ReturnWindowMinutes != tenant.ReturnWindowMinutes
+                ReturnWindowMinutesChanged = before.ReturnWindowMinutes != tenant.ReturnWindowMinutes,
+                CustomerOwnershipDaysChanged = before.CustomerOwnershipDays != tenant.CustomerOwnershipDays
             });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();

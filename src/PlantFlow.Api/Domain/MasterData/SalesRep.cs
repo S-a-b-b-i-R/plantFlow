@@ -16,4 +16,7 @@ public class SalesRep : AuditableEntity, ITenantOwned
     // Who this rep reports to (a sales manager, who is also a SalesRep record).
     public Guid? ManagerId { get; set; }
     public ActiveStatus Status { get; set; } = ActiveStatus.Active;
+
+    // When this rep last looked at the open customers. Drives the menu badge.
+    public DateTime? OpenCustomersSeenUtc { get; set; }
 }

@@ -9,19 +9,25 @@ import {
     SiteForm,
 } from "@/components/customers/CustomerForms";
 import { DeactivateControl } from "@/components/customers/DeactivateControl";
+import { OpenChip } from "@/components/customers/OpenChip";
 import {
     useActivePlantOptions,
     useCustomer,
     useCustomerSave,
+    useMyRep,
+    useSalesReps,
     useSiteDistances,
     useSites,
 } from "@/components/customers/useCustomers";
 import { OpButton as Button } from "@/components/operator/OpButton";
-import { panelClass } from "@/components/orders/styles";
+import { Field } from "@/components/orders/Field";
+import { ReasonAction } from "@/components/orders/ReasonAction";
+import { inputClass, panelClass } from "@/components/orders/styles";
 import { StatusChip } from "@/components/plants/StatusChip";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
     customerBody,
+    ownershipText,
     siteBody,
     type Customer,
     type Site,
@@ -44,6 +50,7 @@ export function CustomerPage() {
     const canVat = can(me, PERMISSIONS.customersVat);
     const customer = useCustomer(id);
     const sites = useSites(id);
+    const myRep = useMyRep();
     const [editing, setEditing] = useState<Editing>(null);
     const close = () => setEditing(null);
 
@@ -67,6 +74,11 @@ export function CustomerPage() {
 
     const c = customer.data;
     const siteItems = sites.data?.items ?? [];
+    const myRepId = myRep.data?.id ?? null;
+    // A rep changes only their own and open customers. They may still see one someone else
+    // now owns while an order of theirs is under way.
+    const canWork =
+        canManage && (canAssign || c.isOpen || c.salesRepId === myRepId);
 
     return (
         <div className="mx-auto max-w-3xl space-y-6">
@@ -80,10 +92,11 @@ export function CustomerPage() {
                         <h1 className="display flex flex-wrap items-center gap-3 text-4xl leading-none">
                             {c.name}
                             <StatusChip status={c.status} />
+                            {c.isOpen && <OpenChip />}
                         </h1>
                         <dl className="mt-2 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
-                            <dt className="text-muted-foreground">Sales rep</dt>
-                            <dd>{c.salesRepName ?? "None"}</dd>
+                            <dt className="text-muted-foreground">Owner</dt>
+                            <dd>{ownershipText(c, myRepId)}</dd>
                             {c.phone && (
                                 <>
                                     <dt className="text-muted-foreground">
@@ -111,7 +124,7 @@ export function CustomerPage() {
                             <dd>{c.vatExempt ? "Exempt" : "Charged"}</dd>
                         </dl>
                     </div>
-                    {canManage && editing?.kind !== "customer" && (
+                    {canWork && editing?.kind !== "customer" && (
                         <Button
                             variant="outline"
                             className="h-11"
@@ -131,7 +144,10 @@ export function CustomerPage() {
                 )}
                 <div className="flex flex-wrap items-start gap-2">
                     {canVat && <VatExemptToggle customer={c} />}
-                    {canManage && editing?.kind !== "customer" && (
+                    {canAssign && editing?.kind !== "customer" && (
+                        <ChangeOwner key={c.salesRepId ?? ""} customer={c} />
+                    )}
+                    {canWork && editing?.kind !== "customer" && (
                         <DeactivateControl
                             noun="customer"
                             status={c.status}
@@ -152,7 +168,7 @@ export function CustomerPage() {
                             site.
                         </p>
                     </div>
-                    {canManage && editing?.kind !== "site" && (
+                    {canWork && editing?.kind !== "site" && (
                         <Button
                             variant="outline"
                             className="h-11"
@@ -190,7 +206,7 @@ export function CustomerPage() {
                             <SiteRow
                                 key={site.id}
                                 site={site}
-                                canManage={canManage}
+                                canManage={canWork}
                                 editingDistances={
                                     editing?.kind === "distances" &&
                                     editing.siteId === site.id
@@ -222,6 +238,52 @@ function BackLink() {
         >
             <LuChevronLeft aria-hidden className="size-4" /> All customers
         </Link>
+    );
+}
+
+// A sales manager moves the customer to another rep, whose time starts now, or releases it to every rep.
+function ChangeOwner({ customer }: { customer: Customer }) {
+    const reps = useSalesReps("Active");
+    const [repId, setRepId] = useState(
+        customer.isOpen ? "" : (customer.salesRepId ?? ""),
+    );
+    const save = useCustomerSave("", `/api/customers/${customer.id}/owner`);
+
+    return (
+        <>
+            <ReasonAction
+                label="Change owner"
+                question="Why is the owner changing?"
+                submitLabel={repId ? "Change owner" : "Release to every rep"}
+                className="h-11 px-4"
+                pending={save.isPending}
+                onSubmit={(reason) =>
+                    save.mutate({ salesRepId: repId || null, reason })
+                }
+                extra={
+                    <Field label="New owner" className="mt-3">
+                        <select
+                            value={repId}
+                            onChange={(e) => setRepId(e.target.value)}
+                            className={inputClass}
+                        >
+                            <option value="">Nobody: open to every rep</option>
+                            {(reps.data?.items ?? []).map((r) => (
+                                <option key={r.id} value={r.id}>
+                                    {r.name}
+                                    {r.region ? ` · ${r.region}` : ""}
+                                </option>
+                            ))}
+                        </select>
+                    </Field>
+                }
+            />
+            {save.isError && (
+                <p role="alert" className="w-full text-sm text-late">
+                    {save.error.message}
+                </p>
+            )}
+        </>
     );
 }
 

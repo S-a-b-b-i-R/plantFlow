@@ -582,6 +582,9 @@ namespace PlantFlow.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<DateTime>("OwnershipStartedUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Phone")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
@@ -898,6 +901,9 @@ namespace PlantFlow.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("OpenCustomersSeenUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Region")
                         .HasMaxLength(100)
@@ -2256,6 +2262,9 @@ namespace PlantFlow.Api.Migrations
 
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CustomerOwnershipDays")
+                        .HasColumnType("int");
 
                     b.Property<int>("LateThresholdMinutes")
                         .HasColumnType("int");
