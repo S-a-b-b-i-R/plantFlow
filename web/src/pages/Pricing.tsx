@@ -1,7 +1,7 @@
 import { Navigate, NavLink, useParams } from "react-router-dom";
 import { can, PERMISSIONS } from "@/auth/permissions";
 import { useMe } from "@/auth/useMe";
-import { panelClass } from "@/components/orders/styles";
+import { panelClass, tabClass, tabRowClass } from "@/components/orders/styles";
 import { kinds } from "@/components/pricing/kinds";
 import { MarginReport } from "@/components/pricing/MarginReport";
 import { PolicyPanel } from "@/components/pricing/PolicyPanel";
@@ -10,13 +10,7 @@ import { usePendingTotal } from "@/components/pricing/useBook";
 import type { PriceBookKind } from "@/components/pricing/kind";
 import { cn } from "@/lib/utils";
 
-const tabClass = ({ isActive }: { isActive: boolean }) =>
-    cn(
-        "inline-flex h-10 items-center gap-2 rounded-sm border px-4 text-sm font-semibold whitespace-nowrap",
-        isActive
-            ? "border-signal bg-signal text-ink"
-            : "bg-card hover:border-ink",
-    );
+const navTabClass = ({ isActive }: { isActive: boolean }) => tabClass(isActive);
 
 // The five kinds of row that make up the price book, one tab each, an inbox of what waits for this person, and the cost and margin report.
 export function Pricing() {
@@ -57,12 +51,9 @@ export function Pricing() {
                 </p>
             </header>
 
-            <nav
-                aria-label="Pricing"
-                className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
-            >
+            <nav aria-label="Pricing" className={tabRowClass}>
                 {hasInbox && (
-                    <NavLink to="/pricing/approvals" className={tabClass}>
+                    <NavLink to="/pricing/approvals" className={navTabClass}>
                         Approvals
                         <PendingTotal kinds={deciding} />
                     </NavLink>
@@ -71,18 +62,18 @@ export function Pricing() {
                     <NavLink
                         key={k.key}
                         to={`/pricing/${k.key}`}
-                        className={tabClass}
+                        className={navTabClass}
                     >
                         {k.label}
                     </NavLink>
                 ))}
                 {hasMargins && (
-                    <NavLink to="/pricing/margins" className={tabClass}>
+                    <NavLink to="/pricing/margins" className={navTabClass}>
                         Cost and margin
                     </NavLink>
                 )}
                 {hasMargins && (
-                    <NavLink to="/pricing/rules" className={tabClass}>
+                    <NavLink to="/pricing/rules" className={navTabClass}>
                         Pricing rules
                     </NavLink>
                 )}

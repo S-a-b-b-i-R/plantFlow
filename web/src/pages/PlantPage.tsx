@@ -47,14 +47,14 @@ export function PlantPage() {
 
     if (detail.isLoading) {
         return (
-            <div className="mx-auto max-w-3xl">
+            <div>
                 <Skeleton className="h-60 w-full" />
             </div>
         );
     }
     if (detail.isError || !detail.data) {
         return (
-            <div className="mx-auto max-w-3xl space-y-3">
+            <div className="space-y-3">
                 <BackLink />
                 <p role="alert" className="text-sm text-late">
                     {detail.error?.message ?? "This plant was not found."}
@@ -67,7 +67,7 @@ export function PlantPage() {
     const batchingPlants = detail.data.batchingPlants;
 
     return (
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="space-y-6">
             <div className="space-y-3">
                 <BackLink />
                 <header className="flex flex-wrap items-start justify-between gap-3">
