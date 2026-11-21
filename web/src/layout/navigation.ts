@@ -9,6 +9,7 @@ import {
     LuScrollText,
     LuSettings,
     LuShieldCheck,
+    LuListChecks,
     LuBuilding,
     LuClipboardList,
     LuFactory,
@@ -118,6 +119,14 @@ export const navigation: NavItem[] = [
         label: "Sales reps",
         icon: LuBriefcase,
         permissions: [PERMISSIONS.masterDataView, PERMISSIONS.customersAssign],
+    },
+    {
+        // The company Admin's getting-started list. Admin's home opens here until it is all done.
+        to: "/setup",
+        group: "Setup",
+        label: "Get started",
+        icon: LuListChecks,
+        permissions: [PERMISSIONS.settingsManage],
     },
     {
         // Everyone with master data access can look; plants.manage is needed to change anything.

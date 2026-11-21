@@ -9,6 +9,8 @@ export interface CompanySummary {
     pendingCount: number;
     adminCount: number;
     createdAtUtc: string | null;
+    setupDone: number;
+    setupTotal: number;
 }
 
 export interface UnassignedUser {

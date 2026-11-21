@@ -13,7 +13,7 @@ namespace PlantFlow.Api.Controllers;
 
 public record TenantSummaryDto(
     Guid Id, string Name, string Slug, TenantStatus Status, int UserCount, int PendingCount = 0, int AdminCount = 0,
-    DateTime? CreatedAtUtc = null);
+    DateTime? CreatedAtUtc = null, int SetupDone = 0, int SetupTotal = 0);
 
 public class TenantStatusRequest
 {
@@ -51,6 +51,7 @@ public class PlatformController(
     ICurrentUser currentUser,
     RoleSeeder roleSeeder,
     JoinCodes joinCodes,
+    SetupChecklist checklist,
     PermissionService permissionService,
     AuditWriter audit) : ControllerBase
 {
@@ -74,14 +75,16 @@ public class PlatformController(
             })
             .ToDictionaryAsync(x => x.TenantId, cancellationToken);
 
-        return tenants
-            .Select(t =>
-            {
-                var c = counts.GetValueOrDefault(t.Id);
-                return new TenantSummaryDto(t.Id, t.Name, t.Slug, t.Status, c?.Count ?? 0, c?.Pending ?? 0,
-                    c?.Admins ?? 0, t.CreatedAtUtc);
-            })
-            .ToList();
+        // A handful of small queries per company; fine for the number of companies PlantFlow serves.
+        var result = new List<TenantSummaryDto>();
+        foreach (var t in tenants)
+        {
+            var c = counts.GetValueOrDefault(t.Id);
+            var setup = await checklist.ForTenantAsync(t.Id, cancellationToken);
+            result.Add(new TenantSummaryDto(t.Id, t.Name, t.Slug, t.Status, c?.Count ?? 0, c?.Pending ?? 0,
+                c?.Admins ?? 0, t.CreatedAtUtc, setup.Done, setup.Total));
+        }
+        return result;
     }
 
     [HttpPost("tenants")]
