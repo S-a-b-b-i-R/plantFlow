@@ -231,6 +231,14 @@ function CompanyRow({ company }: { company: CompanySummary }) {
                         </dd>
                     </div>
                     <div>
+                        <dt className="text-muted-foreground">Set up</dt>
+                        <dd className="font-semibold tabular-nums">
+                            {company.setupDone === company.setupTotal
+                                ? "Done"
+                                : `${company.setupDone} of ${company.setupTotal}`}
+                        </dd>
+                    </div>
+                    <div>
                         <dt className="text-muted-foreground">Admins</dt>
                         <dd
                             className={cn(

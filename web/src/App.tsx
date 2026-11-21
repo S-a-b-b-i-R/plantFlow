@@ -25,6 +25,7 @@ import { Settings } from "@/pages/Settings";
 import { AuditLog } from "@/pages/AuditLog";
 import { Platform } from "@/pages/Platform";
 import { Roles } from "@/pages/Roles";
+import { Setup } from "@/pages/Setup";
 import { Users } from "@/pages/Users";
 
 export default function App() {
@@ -63,6 +64,7 @@ export default function App() {
                         <Route path="users" element={<Users />} />
                         <Route path="roles" element={<Roles />} />
                         <Route path="audit" element={<AuditLog />} />
+                        <Route path="setup" element={<Setup />} />
                         <Route path="settings" element={<Settings />} />
                         <Route path="platform" element={<Platform />} />
                     </Route>
