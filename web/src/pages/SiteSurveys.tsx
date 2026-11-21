@@ -19,10 +19,10 @@ export function SiteSurveys() {
     const list = surveys.data ?? [];
 
     return (
-        <div className="mx-auto max-w-2xl space-y-4">
+        <div className="space-y-5">
             <Link
                 to="/surveys"
-                className="inline-flex h-10 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                className="inline-flex min-h-11 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
                 <LuChevronLeft aria-hidden className="size-4" />
                 Survey requests
@@ -40,7 +40,7 @@ export function SiteSurveys() {
                         {site.data.name}
                     </h1>
                     {site.data.address && (
-                        <p className="mt-2 text-sm text-muted-foreground">
+                        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                             {site.data.address}
                         </p>
                     )}
@@ -77,7 +77,7 @@ export function SiteSurveys() {
                 </p>
             )}
 
-            <div className="space-y-3">
+            <div className="grid items-start gap-3 lg:grid-cols-2">
                 {list.map((survey, index) => (
                     <SurveyCard
                         key={survey.id}

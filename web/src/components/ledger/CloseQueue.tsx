@@ -34,7 +34,7 @@ export function CloseQueue() {
     }
 
     return (
-        <ul className="space-y-3">
+        <ul className="grid items-start gap-3 lg:grid-cols-2">
             {items.map((c) => (
                 <li key={c.id} className={cn(panelClass, "space-y-3 p-4")}>
                     <div className="flex flex-wrap items-start justify-between gap-3">

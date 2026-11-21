@@ -183,11 +183,11 @@ export function SurveyForm() {
                 e.preventDefault();
                 save.mutate();
             }}
-            className="mx-auto max-w-2xl space-y-6 pb-4"
+            className="space-y-6 pb-4"
         >
             <Link
                 to="/surveys"
-                className="inline-flex h-10 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                className="inline-flex min-h-11 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
                 <LuChevronLeft aria-hidden className="size-4" />
                 Survey requests
@@ -229,275 +229,286 @@ export function SurveyForm() {
                 )}
             </header>
 
-            <fieldset disabled={locked} className="space-y-6">
-                <section className="space-y-2">
-                    <h2 className="text-sm font-medium">
-                        Can concrete be poured here?
-                    </h2>
-                    <div className="grid grid-cols-2 gap-3" role="radiogroup">
-                        {choices.map((choice) => (
-                            <button
-                                key={choice}
-                                type="button"
-                                role="radio"
-                                aria-checked={result === choice}
-                                onClick={() => setResult(choice)}
-                                className={cn(
-                                    "h-14 rounded-sm border text-base font-semibold",
-                                    result === choice
-                                        ? choice === "Ok"
-                                            ? "border-ok bg-ok text-white"
-                                            : "border-late bg-late text-white"
-                                        : "bg-card hover:border-ink",
-                                )}
-                            >
-                                {resultLabel[choice]}
-                            </button>
-                        ))}
-                    </div>
-                </section>
+            {/* On a phone the fields come first, then the photos. On a wide screen they sit side by side. */}
+            <div className="grid items-start gap-6 lg:grid-cols-2">
+                <fieldset disabled={locked} className="space-y-6">
+                    <section className="space-y-2">
+                        <h2 className="text-sm font-medium">
+                            Can concrete be poured here?
+                        </h2>
+                        <div
+                            className="grid grid-cols-2 gap-3"
+                            role="radiogroup"
+                        >
+                            {choices.map((choice) => (
+                                <button
+                                    key={choice}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={result === choice}
+                                    onClick={() => setResult(choice)}
+                                    className={cn(
+                                        "h-14 rounded-sm border text-base font-semibold",
+                                        result === choice
+                                            ? choice === "Ok"
+                                                ? "border-ok bg-ok text-white"
+                                                : "border-late bg-late text-white"
+                                            : "bg-card hover:border-ink",
+                                    )}
+                                >
+                                    {resultLabel[choice]}
+                                </button>
+                            ))}
+                        </div>
+                    </section>
 
-                <section className={cn(panelClass, "space-y-3 p-4")}>
-                    <h2 className="text-sm font-medium">Position</h2>
-                    {position ? (
-                        <p className="text-sm">
-                            <span className="font-semibold">
-                                {position.latitude}, {position.longitude}
-                            </span>
-                            <br />
-                            <span
-                                className={cn(
-                                    position.accuracyMeters >
-                                        GOOD_ACCURACY_METERS && "text-late",
-                                )}
-                            >
-                                Within {position.accuracyMeters} m
-                                {position.accuracyMeters >
-                                    GOOD_ACCURACY_METERS &&
-                                    ". That is rough. Step into the open and read it again."}
-                            </span>
-                        </p>
-                    ) : (
-                        <p className="text-sm text-muted-foreground">
-                            Stand at the place where the pump or truck will be,
-                            then read your position.
-                        </p>
-                    )}
-                    <Button
-                        type="button"
-                        variant={position ? "outline" : undefined}
-                        className={cn(
-                            "h-12 w-full px-5 sm:w-auto",
-                            !position && result !== null && nextButtonClass,
+                    <section className={cn(panelClass, "space-y-3 p-4")}>
+                        <h2 className="text-sm font-medium">Position</h2>
+                        {position ? (
+                            <p className="text-sm">
+                                <span className="font-semibold">
+                                    {position.latitude}, {position.longitude}
+                                </span>
+                                <br />
+                                <span
+                                    className={cn(
+                                        position.accuracyMeters >
+                                            GOOD_ACCURACY_METERS && "text-late",
+                                    )}
+                                >
+                                    Within {position.accuracyMeters} m
+                                    {position.accuracyMeters >
+                                        GOOD_ACCURACY_METERS &&
+                                        ". That is rough. Step into the open and read it again."}
+                                </span>
+                            </p>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                Stand at the place where the pump or truck will
+                                be, then read your position.
+                            </p>
                         )}
-                        disabled={locating}
-                        onClick={locate}
-                    >
-                        <LuMapPin aria-hidden className="size-4" />
-                        {locating
-                            ? "Reading position…"
-                            : position
-                              ? "Read it again"
-                              : "Use my location"}
-                    </Button>
-                    {locationError && (
-                        <p role="alert" className="text-sm text-late">
-                            {locationError}
-                        </p>
-                    )}
-                </section>
+                        <Button
+                            type="button"
+                            variant={position ? "outline" : undefined}
+                            className={cn(
+                                "h-12 w-full px-5 sm:w-auto",
+                                !position && result !== null && nextButtonClass,
+                            )}
+                            disabled={locating}
+                            onClick={locate}
+                        >
+                            <LuMapPin aria-hidden className="size-4" />
+                            {locating
+                                ? "Reading position…"
+                                : position
+                                  ? "Read it again"
+                                  : "Use my location"}
+                        </Button>
+                        {locationError && (
+                            <p role="alert" className="text-sm text-late">
+                                {locationError}
+                            </p>
+                        )}
+                    </section>
 
-                <Field
-                    label="How to find the place"
-                    hint="Landmarks, which gate, what to tell the driver."
-                >
-                    <textarea
-                        rows={3}
-                        maxLength={1000}
-                        className={textareaClass}
-                        value={locationNote}
-                        onChange={(e) => setLocationNote(e.target.value)}
-                    />
-                </Field>
-
-                <section className="space-y-4">
-                    <h2 className="display text-2xl leading-none">
-                        Pump setup
-                    </h2>
                     <Field
-                        label="Piping needed (metres)"
-                        hint={
-                            pipingOk
-                                ? undefined
-                                : "Use a number from 0 to 10000 with at most 1 decimal."
-                        }
+                        label="How to find the place"
+                        hint="Landmarks, which gate, what to tell the driver."
                     >
+                        <textarea
+                            rows={3}
+                            maxLength={1000}
+                            className={textareaClass}
+                            value={locationNote}
+                            onChange={(e) => setLocationNote(e.target.value)}
+                        />
+                    </Field>
+
+                    <section className="space-y-4">
+                        <h2 className="display text-2xl leading-none">
+                            Pump setup
+                        </h2>
+                        <Field
+                            label="Piping needed (metres)"
+                            hint={
+                                pipingOk
+                                    ? undefined
+                                    : "Use a number from 0 to 10000 with at most 1 decimal."
+                            }
+                        >
+                            <input
+                                inputMode="decimal"
+                                className={cn(inputClass, "h-12")}
+                                value={piping}
+                                onChange={(e) => setPiping(e.target.value)}
+                            />
+                        </Field>
+                        <Field label="Where the pump goes">
+                            <textarea
+                                rows={2}
+                                maxLength={500}
+                                className={textareaClass}
+                                value={pumpPosition}
+                                onChange={(e) =>
+                                    setPumpPosition(e.target.value)
+                                }
+                            />
+                        </Field>
+                        <Field label="Where the trucks connect">
+                            <textarea
+                                rows={2}
+                                maxLength={500}
+                                className={textareaClass}
+                                value={truckPoint}
+                                onChange={(e) => setTruckPoint(e.target.value)}
+                            />
+                        </Field>
+                    </section>
+
+                    <Field label="Anything else">
+                        <textarea
+                            rows={3}
+                            maxLength={1000}
+                            className={textareaClass}
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                        />
+                    </Field>
+
+                    <Field label="Survey date">
                         <input
-                            inputMode="decimal"
+                            type="date"
                             className={cn(inputClass, "h-12")}
-                            value={piping}
-                            onChange={(e) => setPiping(e.target.value)}
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
                         />
                     </Field>
-                    <Field label="Where the pump goes">
-                        <textarea
-                            rows={2}
-                            maxLength={500}
-                            className={textareaClass}
-                            value={pumpPosition}
-                            onChange={(e) => setPumpPosition(e.target.value)}
-                        />
-                    </Field>
-                    <Field label="Where the trucks connect">
-                        <textarea
-                            rows={2}
-                            maxLength={500}
-                            className={textareaClass}
-                            value={truckPoint}
-                            onChange={(e) => setTruckPoint(e.target.value)}
-                        />
-                    </Field>
-                </section>
+                </fieldset>
 
-                <Field label="Anything else">
-                    <textarea
-                        rows={3}
-                        maxLength={1000}
-                        className={textareaClass}
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                    />
-                </Field>
-
-                <Field label="Survey date">
-                    <input
-                        type="date"
-                        className={cn(inputClass, "h-12")}
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                    />
-                </Field>
-            </fieldset>
-
-            <section className="space-y-3">
-                <h2 className="text-sm font-medium">
-                    Photos ({photos.length} of {MAX_PHOTOS})
-                </h2>
-                {photos.length > 0 && (
-                    <ul className="grid grid-cols-3 gap-2">
-                        {photos.map((photo) => (
-                            <li key={photo.key} className="space-y-1">
-                                <div className="relative">
-                                    <img
-                                        src={photo.preview}
-                                        alt="Survey photo"
-                                        className="aspect-4/3 w-full rounded-sm border object-cover"
-                                    />
-                                    {!photo.uploaded && (
-                                        <button
-                                            type="button"
-                                            aria-label="Remove this photo"
-                                            onClick={() =>
+                <section className="space-y-3">
+                    <h2 className="text-sm font-medium">
+                        Photos ({photos.length} of {MAX_PHOTOS})
+                    </h2>
+                    {photos.length > 0 && (
+                        <ul className="grid grid-cols-3 gap-2">
+                            {photos.map((photo) => (
+                                <li key={photo.key} className="space-y-1">
+                                    <div className="relative">
+                                        <img
+                                            src={photo.preview}
+                                            alt="Survey photo"
+                                            className="aspect-4/3 w-full rounded-sm border object-cover"
+                                        />
+                                        {!photo.uploaded && (
+                                            <button
+                                                type="button"
+                                                aria-label="Remove this photo"
+                                                onClick={() =>
+                                                    setPhotos((current) =>
+                                                        current.filter(
+                                                            (p) =>
+                                                                p.key !==
+                                                                photo.key,
+                                                        ),
+                                                    )
+                                                }
+                                                className="absolute top-1 right-1 grid size-8 place-items-center rounded-full bg-ink/80 text-white"
+                                            >
+                                                <LuX
+                                                    aria-hidden
+                                                    className="size-4"
+                                                />
+                                            </button>
+                                        )}
+                                    </div>
+                                    {photo.uploaded ? (
+                                        <p className="text-xs text-ok">
+                                            Uploaded
+                                        </p>
+                                    ) : (
+                                        <input
+                                            aria-label="Photo caption"
+                                            placeholder="Caption"
+                                            maxLength={200}
+                                            className={cn(
+                                                inputClass,
+                                                "h-9 text-xs",
+                                            )}
+                                            value={photo.caption}
+                                            onChange={(e) =>
                                                 setPhotos((current) =>
-                                                    current.filter(
-                                                        (p) =>
-                                                            p.key !== photo.key,
+                                                    current.map((p) =>
+                                                        p.key === photo.key
+                                                            ? {
+                                                                  ...p,
+                                                                  caption:
+                                                                      e.target
+                                                                          .value,
+                                                              }
+                                                            : p,
                                                     ),
                                                 )
                                             }
-                                            className="absolute top-1 right-1 grid size-8 place-items-center rounded-full bg-ink/80 text-white"
-                                        >
-                                            <LuX
-                                                aria-hidden
-                                                className="size-4"
-                                            />
-                                        </button>
+                                        />
                                     )}
-                                </div>
-                                {photo.uploaded ? (
-                                    <p className="text-xs text-ok">Uploaded</p>
-                                ) : (
-                                    <input
-                                        aria-label="Photo caption"
-                                        placeholder="Caption"
-                                        maxLength={200}
-                                        className={cn(
-                                            inputClass,
-                                            "h-9 text-xs",
-                                        )}
-                                        value={photo.caption}
-                                        onChange={(e) =>
-                                            setPhotos((current) =>
-                                                current.map((p) =>
-                                                    p.key === photo.key
-                                                        ? {
-                                                              ...p,
-                                                              caption:
-                                                                  e.target
-                                                                      .value,
-                                                          }
-                                                        : p,
-                                                ),
-                                            )
-                                        }
-                                    />
-                                )}
-                            </li>
-                        ))}
-                    </ul>
-                )}
-                {photos.length < MAX_PHOTOS && (
-                    <div className="flex flex-wrap gap-2">
-                        <input
-                            ref={camera}
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="sr-only"
-                            tabIndex={-1}
-                            onChange={(e) => {
-                                addPhotos(e.target.files);
-                                e.target.value = "";
-                            }}
-                        />
-                        <input
-                            ref={gallery}
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            className="sr-only"
-                            tabIndex={-1}
-                            onChange={(e) => {
-                                addPhotos(e.target.files);
-                                e.target.value = "";
-                            }}
-                        />
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="h-12 flex-1 px-4 sm:flex-none"
-                            onClick={() => camera.current?.click()}
-                        >
-                            <LuCamera aria-hidden className="size-4" />
-                            Take a photo
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="h-12 flex-1 px-4 sm:flex-none"
-                            onClick={() => gallery.current?.click()}
-                        >
-                            <LuImage aria-hidden className="size-4" />
-                            Choose photos
-                        </Button>
-                    </div>
-                )}
-                {photoError && (
-                    <p role="alert" className="text-sm text-late">
-                        {photoError}
-                    </p>
-                )}
-            </section>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                    {photos.length < MAX_PHOTOS && (
+                        <div className="flex flex-wrap gap-2">
+                            <input
+                                ref={camera}
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="sr-only"
+                                tabIndex={-1}
+                                onChange={(e) => {
+                                    addPhotos(e.target.files);
+                                    e.target.value = "";
+                                }}
+                            />
+                            <input
+                                ref={gallery}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="sr-only"
+                                tabIndex={-1}
+                                onChange={(e) => {
+                                    addPhotos(e.target.files);
+                                    e.target.value = "";
+                                }}
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-12 flex-1 px-4 sm:flex-none"
+                                onClick={() => camera.current?.click()}
+                            >
+                                <LuCamera aria-hidden className="size-4" />
+                                Take a photo
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-12 flex-1 px-4 sm:flex-none"
+                                onClick={() => gallery.current?.click()}
+                            >
+                                <LuImage aria-hidden className="size-4" />
+                                Choose photos
+                            </Button>
+                        </div>
+                    )}
+                    {photoError && (
+                        <p role="alert" className="text-sm text-late">
+                            {photoError}
+                        </p>
+                    )}
+                </section>
+            </div>
 
             <div className="sticky bottom-0 -mx-4 space-y-2 border-t bg-background px-4 py-3 sm:mx-0 sm:px-0">
                 {save.isError && (

@@ -2,7 +2,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { LuChevronRight, LuMapPin } from "react-icons/lu";
 import { can, PERMISSIONS } from "@/auth/permissions";
 import { useMe } from "@/auth/useMe";
-import { panelClass } from "@/components/orders/styles";
+import { panelClass, tabClass, tabRowClass } from "@/components/orders/styles";
 import { ApprovalQueue } from "@/components/surveys/ApprovalQueue";
 import {
     useSurveyApprovals,
@@ -12,14 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { shortDate } from "@/lib/orders";
 import { mapLink } from "@/lib/surveys";
 import { cn } from "@/lib/utils";
-
-const tabClass = (active: boolean) =>
-    cn(
-        "flex min-h-11 items-center gap-2 border-b-[3px] px-3 text-sm font-medium",
-        active
-            ? "border-signal text-foreground"
-            : "border-transparent text-muted-foreground hover:text-foreground",
-    );
 
 // Two lists: orders waiting for a surveyor, and recorded surveys waiting for a plant manager.
 // Each person sees the tabs their permissions allow. A plant manager who only approves lands on To approve.
@@ -36,13 +28,13 @@ export function Surveys() {
     const waiting = approvals.data?.surveys.length ?? 0;
 
     return (
-        <div className="mx-auto max-w-2xl space-y-4">
+        <div className="space-y-5">
             <header>
                 <h1 className="display text-4xl leading-none">Site surveys</h1>
             </header>
 
             {canApprove && (
-                <nav className="flex border-b" aria-label="Survey lists">
+                <nav className={tabRowClass} aria-label="Survey lists">
                     {canPerform && (
                         <button
                             type="button"
@@ -63,7 +55,7 @@ export function Surveys() {
                     >
                         To approve
                         {waiting > 0 && (
-                            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-signal px-1.5 text-xs font-bold text-ink">
+                            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-ink px-1.5 text-xs font-bold text-white">
                                 {waiting}
                             </span>
                         )}
@@ -87,7 +79,7 @@ function RequestQueue({ canPerform }: { canPerform: boolean }) {
 
     return (
         <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+            <p className="max-w-2xl text-sm text-muted-foreground">
                 Orders waiting for a survey. Go to the site, then record what
                 you see there: where it is, how to reach it and where the pump
                 goes.
@@ -118,7 +110,7 @@ function RequestQueue({ canPerform }: { canPerform: boolean }) {
                 </p>
             )}
 
-            <ul className="space-y-3">
+            <ul className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {requests.data?.map((request) => (
                     <li key={request.orderId} className={panelClass}>
                         <Link
