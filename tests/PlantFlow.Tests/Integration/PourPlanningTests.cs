@@ -433,7 +433,7 @@ public partial class PourPlanningTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.Conflict, none.StatusCode);
         Assert.Contains("This order needs a site survey.", await none.Content.ReadAsStringAsync());
 
-        var audit = await admin.GetFromJsonAsync<List<AuditLogDto>>("/api/audit", ApiFactory.Json);
+        var audit = await TestData.AuditAsync(admin);
         Assert.Contains(audit!, e => e.Action == "order.survey_changed" && e.EntityId == fx.OrderId.ToString());
 
         // Another company cannot touch it.

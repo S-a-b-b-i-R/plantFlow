@@ -121,7 +121,7 @@ public partial class PourPlanningTests
         Assert.Equal(HttpStatusCode.Created, recorded.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await manager.Client.PostAsJsonAsync($"/api/loads/{late.Id}/part-return/late", part)).StatusCode);
 
-        var audit = (await admin.GetFromJsonAsync<List<AuditLogDto>>("/api/audit?take=100", ApiFactory.Json))!;
+        var audit = await TestData.AuditAsync(admin);
         Assert.Contains(audit, e => e.Action == "load.part_return_late" && e.EntityId == late.Id.ToString());
         Assert.DoesNotContain(audit, e => e.Action == "load.part_return_late" && e.EntityId == early.Id.ToString());
     }

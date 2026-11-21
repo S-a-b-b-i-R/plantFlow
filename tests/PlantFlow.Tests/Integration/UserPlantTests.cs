@@ -129,7 +129,7 @@ public class UserPlantTests(ApiFactory factory)
 
         (await SetPlantsAsync(company.Admin.Client, manager.Id, plant)).EnsureSuccessStatusCode();
 
-        var audit = await company.Admin.Client.GetFromJsonAsync<List<AuditLogDto>>("/api/audit", ApiFactory.Json);
+        var audit = await TestData.AuditAsync(company.Admin.Client);
         Assert.Contains(audit!, e => e.Action == "user.plants_changed" && e.EntityId == manager.Id.ToString());
     }
 }

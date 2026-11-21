@@ -1,12 +1,17 @@
 using System.Net;
 using System.Net.Http.Json;
 using PlantFlow.Api.Controllers;
+using PlantFlow.Api.Infrastructure;
 
 namespace PlantFlow.Tests.Integration;
 
 // Shared setup for integration tests. Each helper creates one thing through the real API and returns it.
 public static class TestData
 {
+    // The newest 100 audit entries of the caller's company.
+    public static async Task<List<AuditLogDto>> AuditAsync(HttpClient client) =>
+        (await client.GetFromJsonAsync<PagedResult<AuditLogDto>>("/api/audit?pageSize=100", ApiFactory.Json))!.Items;
+
     public static async Task<Guid> CreateProductAsync(HttpClient client, string code = "G4000", string status = "Active")
     {
         var response = await client.PostAsJsonAsync("/api/products",

@@ -22,6 +22,7 @@ import { Plants } from "@/pages/Plants";
 import { Quality } from "@/pages/Quality";
 import { SalesReps } from "@/pages/SalesReps";
 import { Settings } from "@/pages/Settings";
+import { AuditLog } from "@/pages/AuditLog";
 import { Roles } from "@/pages/Roles";
 import { Users } from "@/pages/Users";
 
@@ -60,6 +61,7 @@ export default function App() {
                         <Route path="catalogue" element={<Catalogue />} />
                         <Route path="users" element={<Users />} />
                         <Route path="roles" element={<Roles />} />
+                        <Route path="audit" element={<AuditLog />} />
                         <Route path="settings" element={<Settings />} />
                     </Route>
                     <Route

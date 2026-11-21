@@ -50,9 +50,12 @@ export async function apiBlob(path: string): Promise<Blob> {
 
     const response = await fetch(`${base}${path}`, { headers });
     if (!response.ok) {
+        // Use the API's own refusal message when it sent one.
+        const problem = await response.json().catch(() => null);
         throw new ApiError(
             response.status,
-            `The file could not be loaded (${response.status}).`,
+            problem?.title ??
+                `The file could not be loaded (${response.status}).`,
         );
     }
     return response.blob();

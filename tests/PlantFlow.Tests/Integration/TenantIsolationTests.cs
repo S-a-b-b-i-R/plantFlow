@@ -86,8 +86,8 @@ public class TenantIsolationTests(ApiFactory factory)
         var b = await factory.CreateCompanyAsync();
         var memberOfA = await factory.AddMemberAsync(a);
 
-        var auditOfA = await a.Admin.Client.GetFromJsonAsync<List<AuditLogDto>>("/api/audit", ApiFactory.Json);
-        var auditOfB = await b.Admin.Client.GetFromJsonAsync<List<AuditLogDto>>("/api/audit", ApiFactory.Json);
+        var auditOfA = await TestData.AuditAsync(a.Admin.Client);
+        var auditOfB = await TestData.AuditAsync(b.Admin.Client);
 
         Assert.Contains(auditOfA!, e => e.EntityId == memberOfA.Id.ToString());
         Assert.DoesNotContain(auditOfB!, e => e.EntityId == memberOfA.Id.ToString());

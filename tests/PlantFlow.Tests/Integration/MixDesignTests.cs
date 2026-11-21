@@ -129,7 +129,7 @@ public class MixDesignTests(ApiFactory factory)
         Assert.Equal(MixDesignStatus.Retired, (await GetDesignAsync(admin, v1.Design.Id))!.Design.Status);
         Assert.Equal(MixDesignStatus.Approved, (await GetDesignAsync(admin, v2.Design.Id))!.Design.Status);
 
-        var audit = await admin.GetFromJsonAsync<List<AuditLogDto>>("/api/audit?take=100", ApiFactory.Json);
+        var audit = await TestData.AuditAsync(admin);
         Assert.Contains(audit!, e => e.Action == "mixdesign.retired" && e.EntityId == v1.Design.Id.ToString());
     }
 

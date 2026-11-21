@@ -6,6 +6,7 @@ import {
     LuCalendarDays,
     LuCarFront,
     LuPackage,
+    LuScrollText,
     LuSettings,
     LuShieldCheck,
     LuClipboardList,
@@ -148,6 +149,14 @@ export const navigation: NavItem[] = [
         label: "Roles",
         icon: LuShieldCheck,
         permissions: [PERMISSIONS.rolesManage],
+    },
+    {
+        // Who changed what and when. Only Admin has audit.view by default.
+        to: "/audit",
+        group: "Setup",
+        label: "Audit log",
+        icon: LuScrollText,
+        permissions: [PERMISSIONS.auditView],
     },
     {
         // Company-wide rules that change billing and planning, so only Admin has settings.manage.
