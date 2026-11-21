@@ -150,7 +150,7 @@ public class PlantTests(ApiFactory factory)
         var company = await factory.CreateCompanyAsync();
         var plant = await CreatePlantAsync(company.Admin.Client, "AUD1");
 
-        var audit = await company.Admin.Client.GetFromJsonAsync<List<AuditLogDto>>("/api/audit", ApiFactory.Json);
+        var audit = await TestData.AuditAsync(company.Admin.Client);
 
         Assert.Contains(audit!, e => e.Action == "plant.created" && e.EntityId == plant.Plant.Id.ToString());
     }

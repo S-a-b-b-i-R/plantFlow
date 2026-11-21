@@ -175,7 +175,7 @@ public class OrderApprovalTests(ApiFactory factory)
         Assert.DoesNotContain(done.Approvals, a => a.Stage == ApprovalStage.Management && a.Decision == ApprovalDecision.Pending);
         Assert.Equal(2, done.Approvals.Count(a => a.Stage == ApprovalStage.Management && a.Decision == ApprovalDecision.Withdrawn));
 
-        var audit = await admin.GetFromJsonAsync<List<AuditLogDto>>("/api/audit?take=100", ApiFactory.Json);
+        var audit = await TestData.AuditAsync(admin);
         Assert.Equal(2, audit!.Count(e => e.Action == "order.revised" && e.EntityId == order.Order.Id.ToString()));
     }
 

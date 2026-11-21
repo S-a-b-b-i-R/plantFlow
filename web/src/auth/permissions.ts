@@ -41,6 +41,7 @@ export const PERMISSIONS = {
     ordersBillingResolve: "orders.billing.resolve",
     usersManage: "users.manage",
     rolesManage: "roles.manage",
+    auditView: "audit.view",
     settingsManage: "settings.manage",
 };
 

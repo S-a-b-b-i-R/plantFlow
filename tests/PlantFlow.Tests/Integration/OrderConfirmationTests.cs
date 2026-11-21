@@ -200,7 +200,7 @@ public class OrderConfirmationTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.Forbidden, (await AmendAsync(rep.Client, w, confirmed, 10m, 120m)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await AmendAsync(other.Admin.Client, w, confirmed, 10m, 120m)).StatusCode);
 
-        var audit = await admin.GetFromJsonAsync<List<AuditLogDto>>("/api/audit?take=100", ApiFactory.Json);
+        var audit = await TestData.AuditAsync(admin);
         Assert.Contains(audit!, e => e.Action == "order.confirmed" && e.EntityId == confirmed.Order.Id.ToString());
     }
 

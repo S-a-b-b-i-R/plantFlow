@@ -50,7 +50,7 @@ public class SettingsTests(ApiFactory factory)
         Assert.Equal(SurveyRequirement.All, settings.RequireSurveyBeforePlanning);
         Assert.Equal(2, settings.PumpRestShifts);
 
-        var audit = await admin.GetFromJsonAsync<List<AuditLogDto>>("/api/audit", ApiFactory.Json);
+        var audit = await TestData.AuditAsync(admin);
         Assert.Contains(audit!, e => e.Action == "tenant.settings_changed");
     }
 
@@ -162,7 +162,7 @@ public class SettingsTests(ApiFactory factory)
 
         var withReason = await ChangeAsync(admin, s => s with { VatOnConcrete = false }, "Customers are VAT registered");
         Assert.Equal(HttpStatusCode.NoContent, withReason.StatusCode);
-        var audit = await admin.GetFromJsonAsync<List<AuditLogDto>>("/api/audit", ApiFactory.Json);
+        var audit = await TestData.AuditAsync(admin);
         Assert.Contains(audit!, e => e.Action == "tenant.settings_changed" && e.ChangesJson!.Contains("Customers are VAT registered"));
     }
 

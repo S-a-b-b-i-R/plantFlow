@@ -31,7 +31,7 @@ public class UserAdminTests(ApiFactory factory)
         await AssertProblemAsync(await DisableAsync(admin, planner.Id, "  "), HttpStatusCode.BadRequest, UsersController.ReasonNeeded);
 
         Assert.Equal(HttpStatusCode.NoContent, (await DisableAsync(admin, planner.Id, "Left the company")).StatusCode);
-        var audit = await admin.GetFromJsonAsync<List<AuditLogDto>>("/api/audit", ApiFactory.Json);
+        var audit = await TestData.AuditAsync(admin);
         Assert.Contains(audit!, e => e.Action == "user.disabled" && e.ChangesJson!.Contains("Left the company"));
 
         // Enabling again is one step and needs no reason.
