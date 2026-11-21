@@ -38,7 +38,8 @@ public class OrderChargeTests(ApiFactory factory)
             pumpFreeAboveCft = freeAbove,
             settings.RequireSurveyBeforePlanning,
             settings.PumpRestShifts,
-            settings.RequireCreditApproval
+            settings.RequireCreditApproval,
+            reason = "Test setup"
         }, ApiFactory.Json)).EnsureSuccessStatusCode();
     }
 

@@ -23,7 +23,8 @@ public class VatOptionsTests(ApiFactory factory)
             settings.RequireSurveyBeforePlanning,
             settings.PumpRestShifts,
             settings.RequireCreditApproval,
-            vatOnConcrete = value
+            vatOnConcrete = value,
+            reason = "Test setup"
         }, ApiFactory.Json)).EnsureSuccessStatusCode();
     }
 

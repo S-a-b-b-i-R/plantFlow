@@ -66,6 +66,7 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 | Customer ownership: one rep per customer, opens up after N days without a confirmed order, badge     | Done    |
 | Fleet screen: mixers with drivers, pumps with crews of pump operators, guarded while in use        | Done    |
 | Catalogue screen: products, materials and service charges, edited by Technical and Accounts       | Done    |
+| Settings screen: company rules by section, reasons for billing changes, time zone fixed after orders | Done    |
 | React screens: shift planning and administration                                                     | Planned |
 | Quarterly volume targets, customer volume ledger                                                     | Planned |
 
