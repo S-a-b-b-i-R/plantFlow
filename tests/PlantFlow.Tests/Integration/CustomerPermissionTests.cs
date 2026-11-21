@@ -87,7 +87,8 @@ public class CustomerPermissionTests(ApiFactory factory)
         Assert.Null(unowned.SalesRepId);
         await AssertRefusedAsync(repChanges, CustomersController.RepChangeRefused);
         Assert.Equal(HttpStatusCode.NoContent, repEdits.StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, managerChanges.StatusCode);
+        // A manager moves a customer through Change owner, which asks for a reason (CustomerOwnershipTests).
+        Assert.Equal(HttpStatusCode.Conflict, managerChanges.StatusCode);
     }
 
     [Fact]

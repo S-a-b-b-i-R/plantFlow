@@ -40,4 +40,7 @@ public class Tenant : AuditableEntity
 
     // How long after pouring ends a part return can be recorded without a plant manager.
     public int ReturnWindowMinutes { get; set; } = 120;
+
+    // A rep keeps a customer while they get an order confirmed at least this often. 0 = they keep it for good.
+    public int CustomerOwnershipDays { get; set; } = 120;
 }

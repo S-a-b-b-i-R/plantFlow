@@ -28,7 +28,8 @@ public class HoldOrderRequest
 [ApiController]
 [Route("api/orders/{id:guid}")]
 public class OrderLifecycleController(
-    PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit, OrderApprovalFlow flow, OrderChargeCalculator chargeCalculator) : ControllerBase
+    PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit, OrderApprovalFlow flow, OrderChargeCalculator chargeCalculator,
+    CustomerOwnership ownership) : ControllerBase
 {
     // Records the customer's go-ahead. From here quantities and prices are locked except through an amendment.
     [HttpPost("confirm")]
@@ -58,6 +59,7 @@ public class OrderLifecycleController(
         order.ConfirmationReference = request.Reference?.Trim();
         order.ConfirmedTotal = order.Lines.Sum(l => l.QuantityCft * l.UnitPrice);
         flow.ChangeStatus(order, OrderStatus.Confirmed, null);
+        await ownership.OnConfirmedAsync(order, cancellationToken);
 
         audit.Record(order.TenantId, "order.confirmed", "Order", order.Id.ToString(),
             new { order.Number, Method = request.Method.ToString(), order.ConfirmationReference, order.ConfirmedTotal });

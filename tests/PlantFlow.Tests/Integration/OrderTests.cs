@@ -306,6 +306,9 @@ public class OrderTests(ApiFactory factory)
         var order = await CreateOrderAsync(company.Admin.Client, w, [Line(w.ProductId, 10m)]);
 
         var rep = await factory.AddMemberAsync(company, "Sales Representative"); // can view, create and edit orders
+        // A rep's orders are their own, so their login needs a linked rep record.
+        (await company.Admin.Client.PostAsJsonAsync("/api/sales-reps", new { name = "Rana", userId = rep.Id }))
+            .EnsureSuccessStatusCode();
         var created = await PostOrderAsync(rep.Client, w, [Line(w.ProductId, 10m)]);
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 

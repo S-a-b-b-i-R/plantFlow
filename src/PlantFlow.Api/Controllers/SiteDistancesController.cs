@@ -30,7 +30,8 @@ public class SetSiteDistancesRequest
 
 [ApiController]
 [Route("api/sites/{siteId:guid}/distances")]
-public class SiteDistancesController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
+public class SiteDistancesController(
+    PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit, CustomerOwnership ownership) : ControllerBase
 {
     [HttpGet]
     [HasPermission(Permissions.MasterDataView)]
@@ -49,7 +50,12 @@ public class SiteDistancesController(PlantFlowDbContext db, ICurrentUser current
     [HasPermission(Permissions.CustomersManage)]
     public async Task<IActionResult> Set(Guid siteId, SetSiteDistancesRequest request, CancellationToken cancellationToken)
     {
-        if (!await db.Sites.AnyAsync(s => s.Id == siteId, cancellationToken)) return NotFound();
+        var customerId = await db.Sites.Where(s => s.Id == siteId).Select(s => (Guid?)s.CustomerId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (customerId is null) return NotFound();
+
+        var scope = await ownership.ScopeAsync(User, cancellationToken);
+        if (!await ownership.CanWorkAsync(customerId.Value, scope, cancellationToken)) return NotFound();
 
         var plantIds = request.Distances.Select(d => d.PlantId!.Value).ToList();
 

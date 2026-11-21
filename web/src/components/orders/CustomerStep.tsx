@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LuCheck, LuSearch } from "react-icons/lu";
+import { can, PERMISSIONS } from "@/auth/permissions";
+import { useMe } from "@/auth/useMe";
 import { Field } from "./Field";
 import { SurveyChoice } from "./SurveyChoice";
 import { inputClass, textareaClass } from "./styles";
@@ -27,6 +29,11 @@ export function CustomerStep({
     locked: boolean;
 }) {
     const [search, setSearch] = useState("");
+    const me = useMe().data!;
+    // A sales rep's orders are always their own, so they don't pick a rep.
+    const isRep =
+        can(me, PERMISSIONS.customersManage) &&
+        !can(me, PERMISSIONS.customersAssign);
 
     const customers = useQuery({
         queryKey: ["customers", "pick", search.trim()],
@@ -55,6 +62,7 @@ export function CustomerStep({
             api<Paged<SalesRepOption>>(
                 "/api/sales-reps?status=Active&pageSize=100",
             ),
+        enabled: !isRep,
     });
     const stored = useStoredDistance(draft.siteId, draft.plantId);
 
@@ -62,7 +70,7 @@ export function CustomerStep({
         change({
             customerId: c.id,
             customerName: c.name,
-            salesRepId: c.salesRepId ?? "",
+            salesRepId: isRep ? draft.salesRepId : (c.salesRepId ?? ""),
             siteId: "",
             surveyId: "",
             requestSurvey: false,
@@ -253,24 +261,28 @@ export function CustomerStep({
                     <section className="space-y-3">
                         <h2 className="display text-2xl">A few details</h2>
                         <div className="grid gap-3 sm:grid-cols-2">
-                            <Field label="Sales rep">
-                                <select
-                                    value={draft.salesRepId}
-                                    onChange={(e) =>
-                                        change({ salesRepId: e.target.value })
-                                    }
-                                    className={inputClass}
-                                >
-                                    <option value="">
-                                        The customer's own rep
-                                    </option>
-                                    {(reps.data?.items ?? []).map((r) => (
-                                        <option key={r.id} value={r.id}>
-                                            {r.name}
+                            {!isRep && (
+                                <Field label="Sales rep">
+                                    <select
+                                        value={draft.salesRepId}
+                                        onChange={(e) =>
+                                            change({
+                                                salesRepId: e.target.value,
+                                            })
+                                        }
+                                        className={inputClass}
+                                    >
+                                        <option value="">
+                                            The customer's own rep
                                         </option>
-                                    ))}
-                                </select>
-                            </Field>
+                                        {(reps.data?.items ?? []).map((r) => (
+                                            <option key={r.id} value={r.id}>
+                                                {r.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                            )}
                             <Field label="Payment terms">
                                 <input
                                     value={draft.paymentTerms}

@@ -20,7 +20,7 @@ public class CustomerAndSiteTests(ApiFactory factory)
         HttpClient client, string code, string name = "Test Customer", Guid? salesRepId = null)
     {
         var response = await client.PostAsJsonAsync("/api/customers",
-            new { code, name, type = "Contractor", phone = "01700000000", salesRepId });
+            new { code, name, type = "Contractor", phone = $"0170{code}", salesRepId });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<CustomerDto>(ApiFactory.Json))!;
     }

@@ -63,6 +63,7 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 | Survey approval by the plant manager: approve or send back, "To approve" tab with a badge            | Done    |
 | Plants screen: plants, shifts and batching plants, with a warning before deactivating one in use    | Done    |
 | Customers, sites and site distances, and a Sales reps screen that links reps to logins               | Done    |
+| Customer ownership: one rep per customer, opens up after N days without a confirmed order, badge     | Done    |
 | React screens: shift planning and administration                                                     | Planned |
 | Quarterly volume targets, customer volume ledger                                                     | Planned |
 

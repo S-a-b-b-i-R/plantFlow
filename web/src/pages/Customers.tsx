@@ -4,7 +4,12 @@ import { LuChevronRight, LuPlus } from "react-icons/lu";
 import { can, PERMISSIONS } from "@/auth/permissions";
 import { useMe } from "@/auth/useMe";
 import { CustomerForm } from "@/components/customers/CustomerForms";
-import { useCustomerList, useMyRep } from "@/components/customers/useCustomers";
+import {
+    useCustomerList,
+    useMarkOpenedSeen,
+    useMyRep,
+    useOpenedCount,
+} from "@/components/customers/useCustomers";
 import { OpButton as Button } from "@/components/operator/OpButton";
 import {
     inputClass,
@@ -12,11 +17,14 @@ import {
     panelClass,
 } from "@/components/orders/styles";
 import { StatusChip } from "@/components/plants/StatusChip";
+import { OpenChip } from "@/components/customers/OpenChip";
 import type { StatusFilter } from "@/components/plants/usePlants";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { OwnershipFilter } from "@/lib/customers";
 import { cn } from "@/lib/utils";
 
-// The company's customers. Opening one shows its sites.
+// The company's customers. Opening one shows its sites. A sales rep sees their own customers and
+// the open ones (plus any where an order of theirs is still under way).
 export function Customers() {
     const me = useMe().data!;
     const canManage = can(me, PERMISSIONS.customersManage);
@@ -25,8 +33,18 @@ export function Customers() {
     const navigate = useNavigate();
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState<StatusFilter>("Active");
+    const [ownership, setOwnership] = useState<OwnershipFilter>("All");
     const [adding, setAdding] = useState(false);
-    const customers = useCustomerList(search, status);
+    const customers = useCustomerList(search, status, ownership);
+    const isRep = canManage && !canAssign;
+    const opened = useOpenedCount(isRep);
+    const markSeen = useMarkOpenedSeen();
+    const newlyOpen = opened.data?.count ?? 0;
+
+    const showOwnership = (value: OwnershipFilter) => {
+        setOwnership(value);
+        if (value === "Open" && isRep) markSeen.mutate();
+    };
     const items = customers.data?.items ?? [];
     const total = customers.data?.totalCount ?? 0;
 
@@ -75,6 +93,21 @@ export function Customers() {
                 />
             )}
 
+            {newlyOpen > 0 && ownership !== "Open" && (
+                <button
+                    type="button"
+                    onClick={() => showOwnership("Open")}
+                    className="flex min-h-11 w-full items-center justify-between gap-3 rounded-sm border border-ink/30 bg-card px-3 py-2 text-left text-sm hover:bg-muted/50"
+                >
+                    <span>
+                        {newlyOpen === 1
+                            ? "1 customer opened up since you last looked."
+                            : `${newlyOpen} customers opened up since you last looked.`}
+                    </span>
+                    <span className="font-semibold underline">Show open</span>
+                </button>
+            )}
+
             <div className="flex flex-wrap gap-2">
                 <input
                     type="search"
@@ -94,6 +127,20 @@ export function Customers() {
                     <option value="Inactive">Inactive</option>
                     <option value="All">All</option>
                 </select>
+                <select
+                    value={ownership}
+                    onChange={(e) =>
+                        showOwnership(e.target.value as OwnershipFilter)
+                    }
+                    aria-label="Owner"
+                    className={cn(inputClass, "h-11 w-auto")}
+                >
+                    <option value="All">
+                        {isRep ? "Mine and open" : "Any owner"}
+                    </option>
+                    {isRep && <option value="Mine">Mine</option>}
+                    <option value="Open">Open</option>
+                </select>
             </div>
 
             {customers.isLoading && <Skeleton className="h-40 w-full" />}
@@ -104,9 +151,13 @@ export function Customers() {
             )}
             {customers.data && items.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                    {search.trim() || status !== "Active"
-                        ? "No customers match."
-                        : "No customers yet."}
+                    {ownership === "Open" && !search.trim()
+                        ? "No open customers right now."
+                        : search.trim() ||
+                            status !== "Active" ||
+                            ownership !== "All"
+                          ? "No customers match."
+                          : "No customers yet."}
                 </p>
             )}
 
@@ -131,6 +182,7 @@ export function Customers() {
                                                 status={customer.status}
                                             />
                                         )}
+                                        {customer.isOpen && <OpenChip />}
                                     </span>
                                     <span className="mt-0.5 block text-xs text-muted-foreground">
                                         {customer.type} ·{" "}
@@ -138,6 +190,7 @@ export function Customers() {
                                             ? "1 site"
                                             : `${customer.siteCount} sites`}
                                         {customer.salesRepName &&
+                                            !customer.isOpen &&
                                             ` · ${customer.salesRepName}`}
                                     </span>
                                 </div>

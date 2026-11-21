@@ -26,7 +26,7 @@ public static class TestData
     public static async Task<Guid> CreateCustomerAsync(HttpClient client, string code, string type = "Contractor")
     {
         var response = await client.PostAsJsonAsync("/api/customers",
-            new { code, name = $"Customer {code}", type, phone = "01700000000" });
+            new { code, name = $"Customer {code}", type, phone = $"0170{code}" });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<CustomerDto>(ApiFactory.Json))!.Id;
     }
