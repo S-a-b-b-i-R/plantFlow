@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PlantFlow.Api.Data;
 using PlantFlow.Api.Domain.MasterData;
+using PlantFlow.Api.Domain.MixDesigns;
 using PlantFlow.Api.Domain.Security;
 using PlantFlow.Api.Infrastructure;
 using PlantFlow.Api.Services;
@@ -11,6 +12,9 @@ using PlantFlow.Api.Services;
 namespace PlantFlow.Api.Controllers;
 
 public record MaterialDto(Guid Id, string Code, string Name, MaterialCategory Category, MaterialUnit Unit, ActiveStatus Status);
+
+// Approved mix designs that use the material. Shown as a warning before it is deactivated.
+public record MaterialUsageDto(int ApprovedMixDesigns);
 
 public class MaterialRequest
 {
@@ -74,8 +78,19 @@ public class MaterialsController(PlantFlowDbContext db, ICurrentUser currentUser
         return material;
     }
 
+    [HttpGet("{id:guid}/usage")]
+    [HasPermission(Permissions.MasterDataView)]
+    public async Task<ActionResult<MaterialUsageDto>> Usage(Guid id, CancellationToken cancellationToken)
+    {
+        if (!await db.Materials.AnyAsync(m => m.Id == id, cancellationToken)) return NotFound();
+
+        var designs = await db.MixDesigns.CountAsync(
+            d => d.Status == MixDesignStatus.Approved && d.Items.Any(i => i.MaterialId == id), cancellationToken);
+        return new MaterialUsageDto(designs);
+    }
+
     [HttpPost]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.ProductsManage)]
     public async Task<ActionResult<MaterialDto>> Create(MaterialRequest request, CancellationToken cancellationToken)
     {
         var code = request.Code.Trim().ToUpperInvariant();
@@ -105,7 +120,7 @@ public class MaterialsController(PlantFlowDbContext db, ICurrentUser currentUser
     }
 
     [HttpPut("{id:guid}")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.ProductsManage)]
     public async Task<IActionResult> Update(Guid id, MaterialRequest request, CancellationToken cancellationToken)
     {
         var material = await db.Materials.FirstOrDefaultAsync(m => m.Id == id, cancellationToken);

@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PlantFlow.Api.Data;
 using PlantFlow.Api.Domain.MasterData;
+using PlantFlow.Api.Domain.MixDesigns;
+using PlantFlow.Api.Domain.Pricing;
 using PlantFlow.Api.Domain.Security;
 using PlantFlow.Api.Infrastructure;
 using PlantFlow.Api.Services;
@@ -12,6 +14,9 @@ namespace PlantFlow.Api.Controllers;
 
 public record ProductDto(
     Guid Id, string Code, string Name, string StrengthClass, int MaxAggregateMm, int DefaultSlumpMm, ActiveStatus Status);
+
+// What still uses a product. Shown as a warning before it is deactivated; deactivating is still allowed.
+public record ProductUsageDto(int ActivePrices, int ApprovedMixDesigns, int OpenOrders);
 
 public class ProductRequest
 {
@@ -79,8 +84,22 @@ public class ProductsController(PlantFlowDbContext db, ICurrentUser currentUser,
         return product;
     }
 
+    [HttpGet("{id:guid}/usage")]
+    [HasPermission(Permissions.MasterDataView)]
+    public async Task<ActionResult<ProductUsageDto>> Usage(Guid id, CancellationToken cancellationToken)
+    {
+        if (!await db.Products.AnyAsync(p => p.Id == id, cancellationToken)) return NotFound();
+
+        var prices = await db.Prices.CountAsync(p => p.ProductId == id && p.Status == PriceStatus.Active, cancellationToken);
+        var designs = await db.MixDesigns.CountAsync(
+            d => d.ProductId == id && d.Status == MixDesignStatus.Approved, cancellationToken);
+        var orders = await db.Orders.CountAsync(
+            o => o.Lines.Any(l => l.ProductId == id) && !PlantUsage.ClosedStatuses.Contains(o.Status), cancellationToken);
+        return new ProductUsageDto(prices, designs, orders);
+    }
+
     [HttpPost]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.ProductsManage)]
     public async Task<ActionResult<ProductDto>> Create(ProductRequest request, CancellationToken cancellationToken)
     {
         var code = request.Code.Trim().ToUpperInvariant();
@@ -111,7 +130,7 @@ public class ProductsController(PlantFlowDbContext db, ICurrentUser currentUser,
     }
 
     [HttpPut("{id:guid}")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.ProductsManage)]
     public async Task<IActionResult> Update(Guid id, ProductRequest request, CancellationToken cancellationToken)
     {
         var product = await db.Products.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);

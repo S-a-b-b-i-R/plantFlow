@@ -27,14 +27,14 @@ public static class DefaultRoles
         [
             MasterDataView, MixDesignsView, CostsManage, PricesView, PricesEdit, PricesApprove,
             OrdersView, OrdersBillingResolve, LedgerView, LedgerManage,
-            TargetsView, DashboardsView, CustomersVat
+            TargetsView, DashboardsView, CustomersVat, ChargesManage
         ],
 
         ["Technical"] =
         [
             MasterDataView, MixDesignsView, MixDesignsEdit, MixDesignsApprove, OrdersView,
             OrdersApproveTechnical, SiteSurveysView, SiteSurveysPerform, SiteSurveysAttach,
-            DeliveriesTrack, ReturnsQc, DashboardsView
+            DeliveriesTrack, ReturnsQc, DashboardsView, ProductsManage
         ],
 
         ["Credit"] = [OrdersView, OrdersApproveCredit, LedgerView, DashboardsView],

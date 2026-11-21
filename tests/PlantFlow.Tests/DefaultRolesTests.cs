@@ -48,6 +48,15 @@ public class DefaultRolesTests
     }
 
     [Fact]
+    public void Technical_manages_products_and_materials_and_accounts_manages_service_charges()
+    {
+        string[] Holders(string key) => DefaultRoles.All.Where(r => r.Value.Contains(key)).Select(r => r.Key).Order().ToArray();
+
+        Assert.Equal(["Admin", "Technical"], Holders(Permissions.ProductsManage));
+        Assert.Equal(["Accounts", "Admin"], Holders(Permissions.ChargesManage));
+    }
+
+    [Fact]
     public void Sales_manages_customers_managers_assign_reps_and_accounts_sets_vat_exemption()
     {
         string[] Holders(string key) => DefaultRoles.All.Where(r => r.Value.Contains(key)).Select(r => r.Key).Order().ToArray();

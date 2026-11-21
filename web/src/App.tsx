@@ -16,6 +16,7 @@ import { SurveyForm } from "@/pages/SurveyForm";
 import { Surveys } from "@/pages/Surveys";
 import { Pricing } from "@/pages/Pricing";
 import { PlantPage } from "@/pages/PlantPage";
+import { Catalogue } from "@/pages/Catalogue";
 import { Fleet } from "@/pages/Fleet";
 import { Plants } from "@/pages/Plants";
 import { Quality } from "@/pages/Quality";
@@ -54,6 +55,7 @@ export default function App() {
                         <Route path="plants" element={<Plants />} />
                         <Route path="plants/:id" element={<PlantPage />} />
                         <Route path="fleet" element={<Fleet />} />
+                        <Route path="catalogue" element={<Catalogue />} />
                         <Route path="users" element={<Users />} />
                     </Route>
                     <Route

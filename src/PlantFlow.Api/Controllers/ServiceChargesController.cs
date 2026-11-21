@@ -86,7 +86,7 @@ public class ServiceChargesController(PlantFlowDbContext db, ICurrentUser curren
     }
 
     [HttpPost]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.ChargesManage)]
     public async Task<ActionResult<ServiceChargeDto>> Create(ServiceChargeRequest request, CancellationToken cancellationToken)
     {
         var code = request.Code.Trim().ToUpperInvariant();
@@ -116,7 +116,7 @@ public class ServiceChargesController(PlantFlowDbContext db, ICurrentUser curren
     }
 
     [HttpPut("{id:guid}")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.ChargesManage)]
     public async Task<IActionResult> Update(Guid id, ServiceChargeRequest request, CancellationToken cancellationToken)
     {
         var charge = await db.ServiceCharges.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
