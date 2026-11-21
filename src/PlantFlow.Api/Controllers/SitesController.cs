@@ -81,8 +81,19 @@ public class SitesController(PlantFlowDbContext db, ICurrentUser currentUser, Au
         return site;
     }
 
+    [HttpGet("api/sites/{id:guid}/usage")]
+    [HasPermission(Permissions.MasterDataView)]
+    public async Task<ActionResult<OpenOrdersDto>> Usage(Guid id, CancellationToken cancellationToken)
+    {
+        if (!await db.Sites.AnyAsync(s => s.Id == id, cancellationToken)) return NotFound();
+
+        var open = await db.Orders.CountAsync(
+            o => o.SiteId == id && !PlantUsage.ClosedStatuses.Contains(o.Status), cancellationToken);
+        return new OpenOrdersDto(open);
+    }
+
     [HttpPost("api/customers/{customerId:guid}/sites")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.CustomersManage)]
     public async Task<ActionResult<SiteDto>> Create(Guid customerId, SiteRequest request, CancellationToken cancellationToken)
     {
         if (!await db.Customers.AnyAsync(c => c.Id == customerId, cancellationToken)) return NotFound();
@@ -114,7 +125,7 @@ public class SitesController(PlantFlowDbContext db, ICurrentUser currentUser, Au
     }
 
     [HttpPut("api/sites/{id:guid}")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.CustomersManage)]
     public async Task<IActionResult> Update(Guid id, SiteRequest request, CancellationToken cancellationToken)
     {
         var site = await db.Sites.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);

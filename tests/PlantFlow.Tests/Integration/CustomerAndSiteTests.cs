@@ -153,7 +153,8 @@ public class CustomerAndSiteTests(ApiFactory factory)
     {
         var company = await factory.CreateCompanyAsync();
         var customer = await CreateCustomerAsync(company.Admin.Client, "VIEW1");
-        var rep = await factory.AddMemberAsync(company, "Sales Representative");
+        // A planner reads master data but does not manage customers. (Sales reps now do.)
+        var rep = await factory.AddMemberAsync(company, "Planner");
 
         var list = await rep.Client.GetAsync("/api/customers");
         var sites = await rep.Client.GetAsync($"/api/customers/{customer.Id}/sites");

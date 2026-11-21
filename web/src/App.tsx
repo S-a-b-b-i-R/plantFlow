@@ -2,6 +2,8 @@ import { Route, Routes } from "react-router-dom";
 import { Gate } from "@/auth/Gate";
 import { RequirePermission } from "@/auth/RequirePermission";
 import { AppShell } from "@/layout/AppShell";
+import { CustomerPage } from "@/pages/CustomerPage";
+import { Customers } from "@/pages/Customers";
 import { Home } from "@/pages/Home";
 import { LiveBoard } from "@/pages/LiveBoard";
 import { Operator } from "@/pages/Operator";
@@ -16,6 +18,7 @@ import { Pricing } from "@/pages/Pricing";
 import { PlantPage } from "@/pages/PlantPage";
 import { Plants } from "@/pages/Plants";
 import { Quality } from "@/pages/Quality";
+import { SalesReps } from "@/pages/SalesReps";
 import { Users } from "@/pages/Users";
 
 export default function App() {
@@ -41,6 +44,12 @@ export default function App() {
                         />
                         <Route path="operator" element={<Operator />} />
                         <Route path="quality" element={<Quality />} />
+                        <Route path="customers" element={<Customers />} />
+                        <Route
+                            path="customers/:id"
+                            element={<CustomerPage />}
+                        />
+                        <Route path="sales-reps" element={<SalesReps />} />
                         <Route path="plants" element={<Plants />} />
                         <Route path="plants/:id" element={<PlantPage />} />
                         <Route path="users" element={<Users />} />

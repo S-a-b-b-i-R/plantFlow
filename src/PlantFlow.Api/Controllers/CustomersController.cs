@@ -36,6 +36,14 @@ public class CustomerRequest
     public bool VatExempt { get; init; }
 }
 
+public class CustomerVatExemptRequest
+{
+    public bool VatExempt { get; init; }
+}
+
+// Orders that are not completed, rejected or cancelled. Shown as a warning before deactivating.
+public record OpenOrdersDto(int OpenOrders);
+
 [ApiController]
 [Route("api/customers")]
 public class CustomersController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
@@ -85,8 +93,28 @@ public class CustomersController(PlantFlowDbContext db, ICurrentUser currentUser
         return customer;
     }
 
+    public const string NoRepLink =
+        "Your login is not linked to a sales rep. Ask a sales manager to link it before you add customers.";
+    public const string RepChangeRefused = "Only a sales manager can change a customer's sales rep.";
+    public const string VatRefused = "Only Accounts can change whether a customer is VAT exempt.";
+
+    private bool Can(string permission) => User.HasClaim(PlantFlowClaims.Permission, permission);
+
+    [HttpGet("{id:guid}/usage")]
+    [HasPermission(Permissions.MasterDataView)]
+    public async Task<ActionResult<OpenOrdersDto>> Usage(Guid id, CancellationToken cancellationToken)
+    {
+        if (!await db.Customers.AnyAsync(c => c.Id == id, cancellationToken)) return NotFound();
+
+        var open = await db.Orders.CountAsync(
+            o => o.CustomerId == id && !PlantUsage.ClosedStatuses.Contains(o.Status), cancellationToken);
+        return new OpenOrdersDto(open);
+    }
+
+    // A sales rep's new customer is always their own. Someone who assigns reps (a sales manager)
+    // picks the rep, or leaves it empty.
     [HttpPost]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.CustomersManage)]
     public async Task<ActionResult<CustomerDto>> Create(CustomerRequest request, CancellationToken cancellationToken)
     {
         var code = request.Code.Trim().ToUpperInvariant();
@@ -95,8 +123,26 @@ public class CustomersController(PlantFlowDbContext db, ICurrentUser currentUser
             return Problem(title: "A customer with that code already exists.", statusCode: StatusCodes.Status409Conflict);
         }
 
-        var problem = await CheckSalesRepAsync(request.SalesRepId, cancellationToken);
-        if (problem is not null) return problem;
+        if (request.VatExempt && !Can(Permissions.CustomersVat))
+        {
+            return Problem(title: VatRefused, statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        Guid? salesRepId;
+        if (Can(Permissions.CustomersAssign))
+        {
+            var problem = await CheckSalesRepAsync(request.SalesRepId, cancellationToken);
+            if (problem is not null) return problem;
+            salesRepId = request.SalesRepId;
+        }
+        else
+        {
+            var userId = currentUser.UserId;
+            salesRepId = await db.SalesReps
+                .Where(r => r.UserId == userId && r.Status == ActiveStatus.Active)
+                .Select(r => (Guid?)r.Id).FirstOrDefaultAsync(cancellationToken);
+            if (salesRepId is null) return Problem(title: NoRepLink, statusCode: StatusCodes.Status403Forbidden);
+        }
 
         var tenantId = currentUser.TenantId!.Value;
         var customer = new Customer
@@ -107,13 +153,14 @@ public class CustomersController(PlantFlowDbContext db, ICurrentUser currentUser
             Type = request.Type,
             Phone = request.Phone?.Trim(),
             Email = request.Email?.Trim(),
-            SalesRepId = request.SalesRepId,
+            SalesRepId = salesRepId,
             Status = request.Status,
             VatExempt = request.VatExempt
         };
 
         db.Customers.Add(customer);
-        audit.Record(tenantId, "customer.created", "Customer", customer.Id.ToString(), new { customer.Code, customer.Name, VatExempt = customer.VatExempt });
+        audit.Record(tenantId, "customer.created", "Customer", customer.Id.ToString(),
+            new { customer.Code, customer.Name, customer.SalesRepId, VatExempt = customer.VatExempt });
         await db.SaveChangesAsync(cancellationToken);
 
         var dto = await db.Customers.AsNoTracking().Where(c => c.Id == customer.Id).Select(ToDto).FirstAsync(cancellationToken);
@@ -121,11 +168,21 @@ public class CustomersController(PlantFlowDbContext db, ICurrentUser currentUser
     }
 
     [HttpPut("{id:guid}")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.CustomersManage)]
     public async Task<IActionResult> Update(Guid id, CustomerRequest request, CancellationToken cancellationToken)
     {
         var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
         if (customer is null) return NotFound();
+
+        if (request.SalesRepId != customer.SalesRepId && !Can(Permissions.CustomersAssign))
+        {
+            return Problem(title: RepChangeRefused, statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        if (request.VatExempt != customer.VatExempt && !Can(Permissions.CustomersVat))
+        {
+            return Problem(title: VatRefused, statusCode: StatusCodes.Status403Forbidden);
+        }
 
         var code = request.Code.Trim().ToUpperInvariant();
         if (await db.Customers.AnyAsync(c => c.Code == code && c.Id != id, cancellationToken))
@@ -151,7 +208,28 @@ public class CustomersController(PlantFlowDbContext db, ICurrentUser currentUser
         customer.VatExempt = request.VatExempt;
 
         audit.Record(customer.TenantId, "customer.updated", "Customer", customer.Id.ToString(),
-            new { customer.Code, customer.Name, Status = customer.Status.ToString(), VatExempt = customer.VatExempt });
+            new
+            {
+                customer.Code, customer.Name, customer.SalesRepId, Status = customer.Status.ToString(),
+                VatExempt = customer.VatExempt
+            });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    // Accounts sets VAT exemption without needing to edit anything else about the customer.
+    [HttpPut("{id:guid}/vat-exempt")]
+    [HasPermission(Permissions.CustomersVat)]
+    public async Task<IActionResult> SetVatExempt(
+        Guid id, CustomerVatExemptRequest request, CancellationToken cancellationToken)
+    {
+        var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (customer is null) return NotFound();
+        if (customer.VatExempt == request.VatExempt) return NoContent();
+
+        customer.VatExempt = request.VatExempt;
+        audit.Record(customer.TenantId, "customer.vat_exempt_set", "Customer", customer.Id.ToString(),
+            new { customer.Code, customer.VatExempt });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }

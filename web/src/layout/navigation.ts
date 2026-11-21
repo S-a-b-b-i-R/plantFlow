@@ -1,6 +1,8 @@
 import type { IconType } from "react-icons";
 import {
     LuActivity,
+    LuBriefcase,
+    LuBuilding2,
     LuCalendarDays,
     LuClipboardList,
     LuFactory,
@@ -74,6 +76,20 @@ export const navigation: NavItem[] = [
         label: "Quality",
         icon: LuFlaskConical,
         permissions: [PERMISSIONS.returnsQc],
+    },
+    {
+        // Everyone with master data access can look; customers.manage is needed to change anything.
+        to: "/customers",
+        label: "Customers",
+        icon: LuBuilding2,
+        permissions: [PERMISSIONS.masterDataView],
+    },
+    {
+        // Managing reps and their logins is for sales managers.
+        to: "/sales-reps",
+        label: "Sales reps",
+        icon: LuBriefcase,
+        permissions: [PERMISSIONS.masterDataView, PERMISSIONS.customersAssign],
     },
     {
         // Everyone with master data access can look; plants.manage is needed to change anything.

@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PlantFlow.Api.Data;
+using PlantFlow.Api.Domain.Identity;
 using PlantFlow.Api.Domain.MasterData;
 using PlantFlow.Api.Domain.Security;
 using PlantFlow.Api.Infrastructure;
@@ -10,7 +11,12 @@ using PlantFlow.Api.Services;
 
 namespace PlantFlow.Api.Controllers;
 
-public record SalesRepDto(Guid Id, string Name, string? Region, Guid? UserId, Guid? ManagerId, ActiveStatus Status);
+// UserEmail is the linked login's email, filled in by the list.
+public record SalesRepDto(
+    Guid Id, string Name, string? Region, Guid? UserId, Guid? ManagerId, ActiveStatus Status, string? UserEmail);
+
+// An active user of the company who can be linked to a sales rep. LinkedRepId is set when one already is.
+public record LinkableUserDto(Guid Id, string Email, string? DisplayName, Guid? LinkedRepId);
 
 public class SalesRepRequest
 {
@@ -34,7 +40,7 @@ public class SalesRepRequest
 public class SalesRepsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
 {
     private static readonly Expression<Func<SalesRep, SalesRepDto>> ToDto = r =>
-        new SalesRepDto(r.Id, r.Name, r.Region, r.UserId, r.ManagerId, r.Status);
+        new SalesRepDto(r.Id, r.Name, r.Region, r.UserId, r.ManagerId, r.Status, null);
 
     // ?search= matches name or region.  ?status=.  ?sort=name|region, with "-" for descending.
     [HttpGet]
@@ -60,11 +66,50 @@ public class SalesRepsController(PlantFlowDbContext db, ICurrentUser currentUser
             _ => query.OrderBy(r => r.Name)
         };
 
-        return await query.Select(ToDto).ToPagedAsync(paging, cancellationToken);
+        var page = await query.Select(ToDto).ToPagedAsync(paging, cancellationToken);
+
+        var userIds = page.Items.Where(r => r.UserId != null).Select(r => r.UserId!.Value).ToList();
+        var emails = await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Email, cancellationToken);
+
+        return page with
+        {
+            Items = page.Items
+                .Select(r => r with { UserEmail = r.UserId is { } id ? emails.GetValueOrDefault(id) : null })
+                .ToList()
+        };
+    }
+
+    // The sales rep linked to the signed-in user, or nothing (204). A sales rep needs one to add customers.
+    [HttpGet("mine")]
+    [HasPermission(Permissions.MasterDataView)]
+    public async Task<ActionResult<SalesRepDto?>> Mine(CancellationToken cancellationToken)
+    {
+        var userId = currentUser.UserId;
+        var rep = await db.SalesReps.AsNoTracking().Where(r => r.UserId == userId)
+            .Select(ToDto).FirstOrDefaultAsync(cancellationToken);
+        return Ok(rep);
+    }
+
+    [HttpGet("linkable-users")]
+    [HasPermission(Permissions.CustomersAssign)]
+    public async Task<ActionResult<List<LinkableUserDto>>> LinkableUsers(CancellationToken cancellationToken)
+    {
+        var links = await db.SalesReps.AsNoTracking().Where(r => r.UserId != null)
+            .ToDictionaryAsync(r => r.UserId!.Value, r => r.Id, cancellationToken);
+
+        var users = await db.Users.AsNoTracking()
+            .Where(u => u.Status == UserStatus.Active)
+            .OrderBy(u => u.DisplayName ?? u.Email)
+            .Select(u => new { u.Id, u.Email, u.DisplayName })
+            .ToListAsync(cancellationToken);
+
+        return users.Select(u => new LinkableUserDto(
+            u.Id, u.Email, u.DisplayName, links.TryGetValue(u.Id, out var repId) ? repId : null)).ToList();
     }
 
     [HttpPost]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.CustomersAssign)]
     public async Task<ActionResult<SalesRepDto>> Create(SalesRepRequest request, CancellationToken cancellationToken)
     {
         var problem = await CheckLinksAsync(request, null, cancellationToken);
@@ -90,7 +135,7 @@ public class SalesRepsController(PlantFlowDbContext db, ICurrentUser currentUser
     }
 
     [HttpPut("{id:guid}")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.CustomersAssign)]
     public async Task<IActionResult> Update(Guid id, SalesRepRequest request, CancellationToken cancellationToken)
     {
         var rep = await db.SalesReps.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);

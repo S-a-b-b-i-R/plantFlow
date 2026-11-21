@@ -1,0 +1,161 @@
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { LuChevronRight, LuPlus } from "react-icons/lu";
+import { can, PERMISSIONS } from "@/auth/permissions";
+import { useMe } from "@/auth/useMe";
+import { CustomerForm } from "@/components/customers/CustomerForms";
+import { useCustomerList, useMyRep } from "@/components/customers/useCustomers";
+import { OpButton as Button } from "@/components/operator/OpButton";
+import {
+    inputClass,
+    nextButtonClass,
+    panelClass,
+} from "@/components/orders/styles";
+import { StatusChip } from "@/components/plants/StatusChip";
+import type { StatusFilter } from "@/components/plants/usePlants";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+
+// The company's customers. Opening one shows its sites.
+export function Customers() {
+    const me = useMe().data!;
+    const canManage = can(me, PERMISSIONS.customersManage);
+    const canAssign = can(me, PERMISSIONS.customersAssign);
+    const myRep = useMyRep();
+    const navigate = useNavigate();
+    const [search, setSearch] = useState("");
+    const [status, setStatus] = useState<StatusFilter>("Active");
+    const [adding, setAdding] = useState(false);
+    const customers = useCustomerList(search, status);
+    const items = customers.data?.items ?? [];
+    const total = customers.data?.totalCount ?? 0;
+
+    // A sales rep adds customers as their own, so they need a linked rep record first.
+    const needsRepLink =
+        canManage && !canAssign && myRep.isSuccess && !myRep.data;
+    const canAdd =
+        canManage && (canAssign || (myRep.isSuccess && !!myRep.data));
+
+    return (
+        <div className="mx-auto max-w-3xl space-y-4">
+            <header className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h1 className="display text-4xl leading-none">Customers</h1>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        Who buys concrete, and the sites they pour at.
+                    </p>
+                </div>
+                {canAdd && !adding && (
+                    <Button
+                        className={cn("h-11 px-4", nextButtonClass)}
+                        onClick={() => setAdding(true)}
+                    >
+                        <LuPlus aria-hidden /> New customer
+                    </Button>
+                )}
+            </header>
+
+            {needsRepLink && (
+                <p className="rounded-sm border border-ink/30 bg-card p-3 text-sm">
+                    Your login is not linked to a sales rep yet, so you cannot
+                    add customers. Ask a sales manager to link it on the Sales
+                    reps screen.
+                </p>
+            )}
+
+            {adding && (
+                <CustomerForm
+                    customer={null}
+                    canAssign={canAssign}
+                    onDone={(saved) => {
+                        setAdding(false);
+                        if (saved) navigate(`/customers/${saved.id}`);
+                    }}
+                    onCancel={() => setAdding(false)}
+                />
+            )}
+
+            <div className="flex flex-wrap gap-2">
+                <input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search code, name or phone"
+                    aria-label="Search customers"
+                    className={cn(inputClass, "h-11 min-w-0 flex-1")}
+                />
+                <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as StatusFilter)}
+                    aria-label="Show"
+                    className={cn(inputClass, "h-11 w-auto")}
+                >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="All">All</option>
+                </select>
+            </div>
+
+            {customers.isLoading && <Skeleton className="h-40 w-full" />}
+            {customers.isError && (
+                <p role="alert" className="text-sm text-late">
+                    {customers.error.message}
+                </p>
+            )}
+            {customers.data && items.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                    {search.trim() || status !== "Active"
+                        ? "No customers match."
+                        : "No customers yet."}
+                </p>
+            )}
+
+            {items.length > 0 && (
+                <ul className={cn(panelClass, "divide-y")}>
+                    {items.map((customer) => (
+                        <li key={customer.id}>
+                            <Link
+                                to={`/customers/${customer.id}`}
+                                className="flex min-h-14 items-center gap-3 px-4 py-3 hover:bg-muted/50"
+                            >
+                                <div className="min-w-0 flex-1">
+                                    <span className="flex flex-wrap items-center gap-2">
+                                        <span className="font-semibold">
+                                            {customer.code}
+                                        </span>
+                                        <span className="truncate">
+                                            {customer.name}
+                                        </span>
+                                        {customer.status === "Inactive" && (
+                                            <StatusChip
+                                                status={customer.status}
+                                            />
+                                        )}
+                                    </span>
+                                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                                        {customer.type} ·{" "}
+                                        {customer.siteCount === 1
+                                            ? "1 site"
+                                            : `${customer.siteCount} sites`}
+                                        {customer.salesRepName &&
+                                            ` · ${customer.salesRepName}`}
+                                    </span>
+                                </div>
+                                <LuChevronRight
+                                    aria-hidden
+                                    className="size-5 shrink-0 text-muted-foreground"
+                                />
+                            </Link>
+                        </li>
+                    ))}
+                </ul>
+            )}
+            {total > items.length && (
+                <p className="text-xs text-muted-foreground">
+                    Showing {items.length} of {total}. Search to narrow the
+                    list.
+                </p>
+            )}
+        </div>
+    );
+}
