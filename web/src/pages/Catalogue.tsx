@@ -15,7 +15,12 @@ import {
     useUsage,
 } from "@/components/catalogue/useCatalogue";
 import { OpButton as Button } from "@/components/operator/OpButton";
-import { nextButtonClass, panelClass } from "@/components/orders/styles";
+import {
+    nextButtonClass,
+    panelClass,
+    tabClass,
+    tabRowClass,
+} from "@/components/orders/styles";
 import { StatusChip } from "@/components/plants/StatusChip";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -51,20 +56,16 @@ export function Catalogue() {
     const [tab, setTab] = useState<Tab>("products");
 
     return (
-        <div className="mx-auto max-w-3xl space-y-4">
+        <div className="space-y-5">
             <header>
                 <h1 className="display text-4xl leading-none">Catalogue</h1>
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                     The concrete grades you sell, the materials in them, and
                     your service charges.
                 </p>
             </header>
 
-            <div
-                role="tablist"
-                aria-label="Catalogue"
-                className="flex gap-1 overflow-x-auto border-b"
-            >
+            <div role="tablist" aria-label="Catalogue" className={tabRowClass}>
                 {tabs.map((t) => (
                     <button
                         key={t.id}
@@ -72,12 +73,7 @@ export function Catalogue() {
                         role="tab"
                         aria-selected={tab === t.id}
                         onClick={() => setTab(t.id)}
-                        className={cn(
-                            "min-h-11 shrink-0 border-b-[3px] px-3 text-sm font-medium",
-                            tab === t.id
-                                ? "border-signal text-foreground"
-                                : "border-transparent text-muted-foreground hover:text-foreground",
-                        )}
+                        className={tabClass(tab === t.id)}
                     >
                         {t.label}
                     </button>

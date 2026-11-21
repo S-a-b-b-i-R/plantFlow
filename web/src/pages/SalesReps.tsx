@@ -32,13 +32,13 @@ export function SalesReps() {
     const close = () => setEditing(null);
 
     return (
-        <div className="mx-auto max-w-3xl space-y-4">
+        <div className="space-y-5">
             <header className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <h1 className="display text-4xl leading-none">
                         Sales reps
                     </h1>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                         Link each rep to their login so they can add their own
                         customers.
                     </p>

@@ -56,14 +56,14 @@ export function CustomerPage() {
 
     if (customer.isLoading) {
         return (
-            <div className="mx-auto max-w-3xl">
+            <div>
                 <Skeleton className="h-60 w-full" />
             </div>
         );
     }
     if (customer.isError || !customer.data) {
         return (
-            <div className="mx-auto max-w-3xl space-y-3">
+            <div className="space-y-3">
                 <BackLink />
                 <p role="alert" className="text-sm text-late">
                     {customer.error?.message ?? "This customer was not found."}
@@ -81,7 +81,7 @@ export function CustomerPage() {
         canManage && (canAssign || c.isOpen || c.salesRepId === myRepId);
 
     return (
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="space-y-6">
             <div className="space-y-3">
                 <BackLink />
                 <header className="flex flex-wrap items-start justify-between gap-3">

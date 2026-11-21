@@ -55,11 +55,11 @@ export function Customers() {
         canManage && (canAssign || (myRep.isSuccess && !!myRep.data));
 
     return (
-        <div className="mx-auto max-w-3xl space-y-4">
+        <div className="space-y-5">
             <header className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <h1 className="display text-4xl leading-none">Customers</h1>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                         Who buys concrete, and the sites they pour at.
                     </p>
                 </div>
@@ -115,7 +115,10 @@ export function Customers() {
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search code, name or phone"
                     aria-label="Search customers"
-                    className={cn(inputClass, "h-11 min-w-0 flex-1")}
+                    className={cn(
+                        inputClass,
+                        "h-11 min-w-0 flex-1 sm:max-w-md",
+                    )}
                 />
                 <select
                     value={status}

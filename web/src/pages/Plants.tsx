@@ -28,11 +28,11 @@ export function Plants() {
     const items = plants.data?.items ?? [];
 
     return (
-        <div className="mx-auto max-w-3xl space-y-4">
+        <div className="space-y-5">
             <header className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <h1 className="display text-4xl leading-none">Plants</h1>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                         Where concrete is made. Each plant has its working
                         shifts and the batching plants that mix the concrete.
                     </p>
@@ -65,7 +65,10 @@ export function Plants() {
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search code or name"
                     aria-label="Search plants"
-                    className={cn(inputClass, "h-11 min-w-0 flex-1")}
+                    className={cn(
+                        inputClass,
+                        "h-11 min-w-0 flex-1 sm:max-w-md",
+                    )}
                 />
                 <select
                     value={status}

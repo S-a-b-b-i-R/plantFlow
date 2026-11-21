@@ -23,10 +23,10 @@ export function Users() {
     const [savedFor, setSavedFor] = useState<string | null>(null);
 
     return (
-        <div className="mx-auto max-w-3xl space-y-4">
+        <div className="space-y-5">
             <header>
                 <h1 className="display text-4xl leading-none">Users</h1>
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                     Choose the plants each person works for. A plant manager can
                     only approve site surveys for their own plants.
                 </p>
@@ -49,64 +49,66 @@ export function Users() {
                 </p>
             )}
 
-            <ul className={cn(panelClass, "divide-y")}>
-                {users.data?.map((user) => (
-                    <li key={user.id} className="space-y-3 px-4 py-3">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <span className="block truncate font-medium">
-                                    {user.displayName ?? user.email}
-                                </span>
-                                {user.displayName && (
-                                    <span className="block truncate text-sm text-muted-foreground">
-                                        {user.email}
+            {users.data && users.data.length > 0 && (
+                <ul className={cn(panelClass, "divide-y")}>
+                    {users.data.map((user) => (
+                        <li key={user.id} className="space-y-3 px-4 py-3">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <span className="block truncate font-medium">
+                                        {user.displayName ?? user.email}
                                     </span>
+                                    {user.displayName && (
+                                        <span className="block truncate text-sm text-muted-foreground">
+                                            {user.email}
+                                        </span>
+                                    )}
+                                    <span className="mt-1 block text-xs text-muted-foreground">
+                                        {user.status}
+                                        {user.roles.length > 0 &&
+                                            ` · ${user.roles.join(", ")}`}
+                                    </span>
+                                </div>
+                                {user.id === me.id ? (
+                                    <span className="text-xs text-muted-foreground">
+                                        You cannot change your own account.
+                                    </span>
+                                ) : (
+                                    editing !== user.id && (
+                                        <Button
+                                            variant="outline"
+                                            className="h-11"
+                                            onClick={() => {
+                                                setSavedFor(null);
+                                                setEditing(user.id);
+                                            }}
+                                        >
+                                            Change plants
+                                        </Button>
+                                    )
                                 )}
-                                <span className="mt-1 block text-xs text-muted-foreground">
-                                    {user.status}
-                                    {user.roles.length > 0 &&
-                                        ` · ${user.roles.join(", ")}`}
-                                </span>
                             </div>
-                            {user.id === me.id ? (
-                                <span className="text-xs text-muted-foreground">
-                                    You cannot change your own account.
-                                </span>
-                            ) : (
-                                editing !== user.id && (
-                                    <Button
-                                        variant="outline"
-                                        className="h-11"
-                                        onClick={() => {
-                                            setSavedFor(null);
-                                            setEditing(user.id);
-                                        }}
-                                    >
-                                        Change plants
-                                    </Button>
-                                )
-                            )}
-                        </div>
 
-                        {editing === user.id ? (
-                            <PlantPicker
-                                user={user}
-                                plants={plants.data?.items ?? []}
-                                loading={plants.isLoading}
-                                onDone={(saved) => {
-                                    setEditing(null);
-                                    if (saved) setSavedFor(user.id);
-                                }}
-                            />
-                        ) : (
-                            <PlantChips
-                                user={user}
-                                saved={savedFor === user.id}
-                            />
-                        )}
-                    </li>
-                ))}
-            </ul>
+                            {editing === user.id ? (
+                                <PlantPicker
+                                    user={user}
+                                    plants={plants.data?.items ?? []}
+                                    loading={plants.isLoading}
+                                    onDone={(saved) => {
+                                        setEditing(null);
+                                        if (saved) setSavedFor(user.id);
+                                    }}
+                                />
+                            ) : (
+                                <PlantChips
+                                    user={user}
+                                    saved={savedFor === user.id}
+                                />
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
     );
 }

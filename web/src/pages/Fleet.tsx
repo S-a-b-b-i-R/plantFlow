@@ -19,6 +19,8 @@ import {
     inputClass,
     nextButtonClass,
     panelClass,
+    tabClass,
+    tabRowClass,
 } from "@/components/orders/styles";
 import { StatusChip } from "@/components/plants/StatusChip";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,19 +52,15 @@ export function Fleet() {
     const [tab, setTab] = useState<Tab>("mixers");
 
     return (
-        <div className="mx-auto max-w-3xl space-y-4">
+        <div className="space-y-5">
             <header>
                 <h1 className="display text-4xl leading-none">Fleet</h1>
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                     Mixers and their drivers, pumps and their crews.
                 </p>
             </header>
 
-            <div
-                role="tablist"
-                aria-label="Fleet"
-                className="flex gap-1 overflow-x-auto border-b"
-            >
+            <div role="tablist" aria-label="Fleet" className={tabRowClass}>
                 {tabs.map((t) => (
                     <button
                         key={t.id}
@@ -70,12 +68,7 @@ export function Fleet() {
                         role="tab"
                         aria-selected={tab === t.id}
                         onClick={() => setTab(t.id)}
-                        className={cn(
-                            "min-h-11 shrink-0 border-b-[3px] px-3 text-sm font-medium",
-                            tab === t.id
-                                ? "border-signal text-foreground"
-                                : "border-transparent text-muted-foreground hover:text-foreground",
-                        )}
+                        className={tabClass(tab === t.id)}
                     >
                         {t.label}
                     </button>
