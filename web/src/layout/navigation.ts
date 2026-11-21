@@ -7,6 +7,7 @@ import {
     LuCarFront,
     LuPackage,
     LuSettings,
+    LuShieldCheck,
     LuClipboardList,
     LuFactory,
     LuFlaskConical,
@@ -139,6 +140,14 @@ export const navigation: NavItem[] = [
         label: "Users",
         icon: LuUsers,
         permissions: [PERMISSIONS.usersManage, PERMISSIONS.masterDataView],
+    },
+    {
+        // What each role can do. Only Admin has roles.manage by default.
+        to: "/roles",
+        group: "Setup",
+        label: "Roles",
+        icon: LuShieldCheck,
+        permissions: [PERMISSIONS.rolesManage],
     },
     {
         // Company-wide rules that change billing and planning, so only Admin has settings.manage.

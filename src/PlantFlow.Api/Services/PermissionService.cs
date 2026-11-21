@@ -23,14 +23,27 @@ public class PermissionService(PlantFlowDbContext db, IMemoryCache cache)
     // Call this whenever a user's roles or permissions change.
     public void Invalidate(Guid userId, Guid tenantId) => cache.Remove(CacheKey(userId, tenantId));
 
+    // Call this when a role changes, so everyone who has it gets the change at once.
+    public async Task InvalidateRoleAsync(Guid roleId, Guid tenantId, CancellationToken cancellationToken = default)
+    {
+        var userIds = await db.UserRoles.IgnoreQueryFilters()
+            .Where(ur => ur.RoleId == roleId && ur.TenantId == tenantId)
+            .Select(ur => ur.UserId)
+            .ToListAsync(cancellationToken);
+        foreach (var userId in userIds) Invalidate(userId, tenantId);
+    }
+
     private async Task<IReadOnlySet<string>> LoadAsync(Guid userId, Guid tenantId)
     {
         // IgnoreQueryFilters: this runs while the request is still being authenticated, before a tenant is known.
-        var rolePermissions = await db.UserRoles.IgnoreQueryFilters()
+        var roles = await db.UserRoles.IgnoreQueryFilters()
             .Where(ur => ur.UserId == userId && ur.TenantId == tenantId)
-            .SelectMany(ur => ur.Role.Permissions)
-            .Select(rp => rp.PermissionKey)
+            .Select(ur => new { ur.Role.SystemKey, Keys = ur.Role.Permissions.Select(rp => rp.PermissionKey).ToList() })
             .ToListAsync();
+        // The Admin role always has every permission, including ones added after the company was created.
+        var rolePermissions = roles.Any(r => r.SystemKey == DefaultRoles.AdminKey)
+            ? Permissions.All
+            : roles.SelectMany(r => r.Keys);
 
         var overrides = await db.UserPermissions.IgnoreQueryFilters()
             .Where(up => up.UserId == userId && up.TenantId == tenantId)

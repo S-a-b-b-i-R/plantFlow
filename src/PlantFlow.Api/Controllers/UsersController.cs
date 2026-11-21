@@ -129,7 +129,7 @@ public class UsersController(
         }
 
         var keepsAdmin = await db.Roles.AnyAsync(
-            r => wanted.Contains(r.Id) && r.Name == DefaultRoles.AdminRoleName, cancellationToken);
+            r => wanted.Contains(r.Id) && r.SystemKey == DefaultRoles.AdminKey, cancellationToken);
         if (!keepsAdmin && await IsLastAdminAsync(user.Id, cancellationToken)) return LastAdmin();
 
         db.UserRoles.RemoveRange(user.UserRoles.Where(ur => !wanted.Contains(ur.RoleId)));
@@ -282,7 +282,7 @@ public class UsersController(
     // Active, holding the Admin role, and not denied user management.
     private IQueryable<User> ActiveAdmins() =>
         db.Users.Where(u => u.Status == UserStatus.Active
-            && u.UserRoles.Any(ur => ur.Role.Name == DefaultRoles.AdminRoleName)
+            && u.UserRoles.Any(ur => ur.Role.SystemKey == DefaultRoles.AdminKey)
             && !u.Permissions.Any(p => p.PermissionKey == Permissions.UsersManage && !p.IsGranted));
 
     // True when this user is the company's only active Admin, so losing Admin would lock the company out.

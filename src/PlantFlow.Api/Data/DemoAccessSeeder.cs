@@ -21,7 +21,7 @@ public static class DemoAccessSeeder
         if (user is null) return; // Not signed in yet, or already moved.
 
         var adminRole = await db.Roles.IgnoreQueryFilters().FirstOrDefaultAsync(
-            r => r.TenantId == DemoTenant.Id && r.Name == DefaultRoles.AdminRoleName);
+            r => r.TenantId == DemoTenant.Id && r.SystemKey == DefaultRoles.AdminKey);
         if (adminRole is null) return;
 
         user.TenantId = DemoTenant.Id;

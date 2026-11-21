@@ -36,6 +36,11 @@ export interface RoleOption {
     id: string;
     name: string;
     permissions: string[];
+    // One of PlantFlow's roles: can be renamed, not deleted.
+    isBuiltIn: boolean;
+    // The Admin role: always every permission, can't be changed.
+    isLocked: boolean;
+    userCount: number;
 }
 
 export const statusLabel: Record<UserStatus, string> = {
