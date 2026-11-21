@@ -18,6 +18,7 @@ export const tabClass = (active: boolean) =>
             : "bg-card hover:border-ink",
     ].join(" ");
 
-// The row that holds the tabs. On a phone it scrolls sideways instead of wrapping.
+// The row that holds the tabs. On a phone it scrolls sideways instead of wrapping; the cut-off
+// last tab shows there is more, so the scrollbar is hidden.
 export const tabRowClass =
-    "-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0";
+    "-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0";

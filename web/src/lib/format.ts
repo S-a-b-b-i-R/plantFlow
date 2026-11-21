@@ -42,3 +42,12 @@ export function loadParts(c: LoadCounts): string[] {
     if (c.returning) parts.push(`${c.returning} heading back`);
     return parts;
 }
+
+// Up to two letters for an avatar, from a name or an email address.
+export const initialsOf = (name: string) =>
+    name
+        .split(/[\s@.]+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0].toUpperCase())
+        .join("");
