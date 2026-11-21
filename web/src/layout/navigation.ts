@@ -3,6 +3,7 @@ import {
     LuActivity,
     LuCalendarDays,
     LuClipboardList,
+    LuFactory,
     LuFlaskConical,
     LuMapPinned,
     LuTags,
@@ -73,6 +74,13 @@ export const navigation: NavItem[] = [
         label: "Quality",
         icon: LuFlaskConical,
         permissions: [PERMISSIONS.returnsQc],
+    },
+    {
+        // Everyone with master data access can look; plants.manage is needed to change anything.
+        to: "/plants",
+        label: "Plants",
+        icon: LuFactory,
+        permissions: [PERMISSIONS.masterDataView],
     },
     {
         // Assigning plants reads the plant list, which is master data.

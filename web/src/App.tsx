@@ -13,6 +13,8 @@ import { SiteSurveys } from "@/pages/SiteSurveys";
 import { SurveyForm } from "@/pages/SurveyForm";
 import { Surveys } from "@/pages/Surveys";
 import { Pricing } from "@/pages/Pricing";
+import { PlantPage } from "@/pages/PlantPage";
+import { Plants } from "@/pages/Plants";
 import { Quality } from "@/pages/Quality";
 import { Users } from "@/pages/Users";
 
@@ -39,6 +41,8 @@ export default function App() {
                         />
                         <Route path="operator" element={<Operator />} />
                         <Route path="quality" element={<Quality />} />
+                        <Route path="plants" element={<Plants />} />
+                        <Route path="plants/:id" element={<PlantPage />} />
                         <Route path="users" element={<Users />} />
                     </Route>
                     <Route

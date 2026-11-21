@@ -11,6 +11,7 @@ export const PERMISSIONS = {
     returnsManage: "returns.manage",
     returnsQc: "returns.qc",
     masterDataView: "masterdata.view",
+    plantsManage: "plants.manage",
     pricesView: "prices.view",
     pricesEdit: "prices.edit",
     pricesApprove: "prices.approve",

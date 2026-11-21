@@ -13,6 +13,8 @@ public static class Permissions
     // Master data, mix designs, costs and prices
     public const string MasterDataView = "masterdata.view";
     public const string MasterDataEdit = "masterdata.edit";
+    // Plants, their shifts and batching plants. Kept apart from masterdata.edit so plant managers can set up plants.
+    public const string PlantsManage = "plants.manage";
     public const string MixDesignsView = "mixdesigns.view";
     public const string MixDesignsEdit = "mixdesigns.edit";
     public const string MixDesignsApprove = "mixdesigns.approve";

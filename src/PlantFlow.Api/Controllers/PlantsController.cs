@@ -14,6 +14,9 @@ public record PlantSummaryDto(
     Guid Id, string Code, string Name, string? Address, string TimeZone,
     decimal OperatingHoursPerDay, ActiveStatus Status, int BatchingPlantCount, decimal DailyCapacityCft);
 
+// What still relies on a plant. The screen shows it as a warning before the plant is deactivated.
+public record PlantUsageDto(int OpenOrders, int UpcomingPours, int AssignedUsers);
+
 public record PlantDetailDto(PlantSummaryDto Plant, List<BatchingPlantDto> BatchingPlants);
 
 public class PlantRequest
@@ -39,7 +42,8 @@ public class PlantRequest
 
 [ApiController]
 [Route("api/plants")]
-public class PlantsController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
+public class PlantsController(
+    PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit, PlantUsage usage) : ControllerBase
 {
     // Daily capacity is derived, never stored:
     // sum of rated capacity per hour of the active batching plants, times operating hours.
@@ -85,8 +89,20 @@ public class PlantsController(PlantFlowDbContext db, ICurrentUser currentUser, A
         return detail;
     }
 
+    // Open orders, pours planned from today on, and users assigned to the plant.
+    [HttpGet("{id:guid}/usage")]
+    [HasPermission(Permissions.MasterDataView)]
+    public async Task<ActionResult<PlantUsageDto>> Usage(Guid id, CancellationToken cancellationToken)
+    {
+        var plant = await db.Plants.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        if (plant is null) return NotFound();
+
+        var summary = await usage.OfPlantAsync(plant.TenantId, id, cancellationToken);
+        return new PlantUsageDto(summary.OpenOrders, summary.UpcomingPours, summary.AssignedUsers);
+    }
+
     [HttpPost]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.PlantsManage)]
     public async Task<ActionResult<PlantDetailDto>> Create(PlantRequest request, CancellationToken cancellationToken)
     {
         if (!TimeZoneInfo.TryFindSystemTimeZoneById(request.TimeZone, out _))
@@ -121,7 +137,7 @@ public class PlantsController(PlantFlowDbContext db, ICurrentUser currentUser, A
     }
 
     [HttpPut("{id:guid}")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.PlantsManage)]
     public async Task<IActionResult> Update(Guid id, PlantRequest request, CancellationToken cancellationToken)
     {
         if (!TimeZoneInfo.TryFindSystemTimeZoneById(request.TimeZone, out _))
