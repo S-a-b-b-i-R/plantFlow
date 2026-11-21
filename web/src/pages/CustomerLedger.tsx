@@ -50,8 +50,8 @@ export function CustomerLedger() {
     );
 
     return (
-        <div className="mx-auto max-w-3xl space-y-6">
-            <header className="space-y-2">
+        <div className="space-y-6">
+            <div className="space-y-3">
                 <Link
                     to="/ledger"
                     className="inline-flex min-h-11 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -59,14 +59,14 @@ export function CustomerLedger() {
                     <LuChevronLeft aria-hidden className="size-4" />
                     Customer ledger
                 </Link>
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <div>
+                <header className="flex flex-wrap items-end justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="text-sm font-semibold text-muted-foreground">
+                            {s.code}
+                        </p>
                         <h1 className="display text-4xl leading-none">
                             {s.name}
                         </h1>
-                        <p className="text-sm text-muted-foreground">
-                            {s.code}
-                        </p>
                     </div>
                     <div className="sm:text-right">
                         <p className="display text-3xl leading-none tabular-nums">
@@ -76,8 +76,8 @@ export function CustomerLedger() {
                             credit to use, worth {money(s.openValue)}
                         </p>
                     </div>
-                </div>
-            </header>
+                </header>
+            </div>
 
             <section className="space-y-3" aria-label="Credits">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -113,15 +113,23 @@ export function CustomerLedger() {
                             : "."}
                     </p>
                 )}
-                {open.map((c) => (
-                    <CreditCard key={c.id} credit={c} canManage={canManage} />
-                ))}
+                {open.length > 0 && (
+                    <div className="grid items-start gap-3 lg:grid-cols-2">
+                        {open.map((c) => (
+                            <CreditCard
+                                key={c.id}
+                                credit={c}
+                                canManage={canManage}
+                            />
+                        ))}
+                    </div>
+                )}
                 {spent.length > 0 && (
                     <details className="group">
                         <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-muted-foreground">
                             {spent.length} used up or closed
                         </summary>
-                        <div className="mt-2 space-y-3">
+                        <div className="mt-2 grid items-start gap-3 lg:grid-cols-2">
                             {spent.map((c) => (
                                 <CreditCard
                                     key={c.id}

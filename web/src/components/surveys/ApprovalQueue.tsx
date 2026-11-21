@@ -20,7 +20,7 @@ export function ApprovalQueue({
 }) {
     return (
         <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+            <p className="max-w-2xl text-sm text-muted-foreground">
                 Check each survey before planning relies on it. Approve it, or
                 send it back with a reason and the order goes back to the
                 surveyors.
@@ -51,7 +51,7 @@ export function ApprovalQueue({
                     </p>
                 )}
 
-            <ul className="space-y-4">
+            <ul className="grid items-start gap-4 lg:grid-cols-2">
                 {approvals.data?.surveys.map((item) => (
                     <li key={item.survey.id}>
                         <Pending item={item} />

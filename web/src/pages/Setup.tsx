@@ -33,7 +33,7 @@ export function Setup() {
 
             {data && (
                 <>
-                    <div className="max-w-2xl space-y-2">
+                    <div className="space-y-2">
                         <p className="text-sm font-medium tabular-nums">
                             {data.done === data.total
                                 ? "Everything is set up. You can take orders."
@@ -56,7 +56,7 @@ export function Setup() {
                         </div>
                     </div>
 
-                    <ol className={cn(panelClass, "max-w-3xl divide-y")}>
+                    <ol className={cn(panelClass, "divide-y")}>
                         {data.steps.map((step, i) => {
                             const info = stepInfo(step.key);
                             const isNext = step.key === next;

@@ -34,12 +34,12 @@ export function Ledger() {
     const waiting = closes.data?.filter((c) => !c.requestedByMe).length ?? 0;
 
     return (
-        <div className="mx-auto max-w-3xl space-y-4">
+        <div className="space-y-5">
             <header>
                 <h1 className="display text-4xl leading-none">
                     Customer ledger
                 </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                     Concrete a customer ordered but didn't take, kept at the
                     price they ordered it at for their next order of the same
                     mix.
@@ -85,14 +85,17 @@ function Balances() {
 
     return (
         <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <input
                     type="search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Find a customer by name or code"
                     aria-label="Find a customer"
-                    className={cn(inputClass, "h-11 min-w-0 flex-1")}
+                    className={cn(
+                        inputClass,
+                        "h-11 w-full min-w-0 sm:w-auto sm:max-w-md sm:flex-1",
+                    )}
                 />
                 <label className="flex min-h-11 items-center gap-2 text-sm">
                     <input
