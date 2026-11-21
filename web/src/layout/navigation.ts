@@ -17,6 +17,7 @@ import {
     LuFlaskConical,
     LuMapPinned,
     LuTags,
+    LuTarget,
     LuTruck,
     LuUsers,
 } from "react-icons/lu";
@@ -113,6 +114,14 @@ export const navigation: NavItem[] = [
         label: "Quality",
         icon: LuFlaskConical,
         permissions: [PERMISSIONS.returnsQc],
+    },
+    {
+        // Sales reps see only their own target.
+        to: "/targets",
+        group: "Sales",
+        label: "Targets",
+        icon: LuTarget,
+        permissions: [PERMISSIONS.targetsView],
     },
     {
         // Everyone with master data access can look; customers.manage is needed to change anything.

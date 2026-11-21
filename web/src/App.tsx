@@ -6,6 +6,7 @@ import { CustomerPage } from "@/pages/CustomerPage";
 import { Customers } from "@/pages/Customers";
 import { CustomerLedger } from "@/pages/CustomerLedger";
 import { Ledger } from "@/pages/Ledger";
+import { Targets } from "@/pages/Targets";
 import { Home } from "@/pages/Home";
 import { LiveBoard } from "@/pages/LiveBoard";
 import { Operator } from "@/pages/Operator";
@@ -59,6 +60,7 @@ export default function App() {
                             element={<CustomerPage />}
                         />
                         <Route path="sales-reps" element={<SalesReps />} />
+                        <Route path="targets" element={<Targets />} />
                         <Route path="ledger" element={<Ledger />} />
                         <Route
                             path="ledger/:customerId"

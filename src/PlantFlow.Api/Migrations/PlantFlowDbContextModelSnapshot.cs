@@ -2485,6 +2485,60 @@ namespace PlantFlow.Api.Migrations
                     b.ToTable("Prices");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.Targets.VolumeTarget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid?>("PlantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Quarter")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SalesRepId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("VolumeCft")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlantId");
+
+                    b.HasIndex("SalesRepId");
+
+                    b.HasIndex("TenantId", "Year", "Quarter", "Level", "PlantId", "SalesRepId")
+                        .IsUnique();
+
+                    b.ToTable("VolumeTargets");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.Tenancy.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2576,6 +2630,9 @@ namespace PlantFlow.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("YearStartMonth")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -3456,6 +3513,29 @@ namespace PlantFlow.Api.Migrations
                     b.Navigation("Plant");
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("PlantFlow.Api.Domain.Targets.VolumeTarget", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Plant", "Plant")
+                        .WithMany()
+                        .HasForeignKey("PlantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.SalesRep", "SalesRep")
+                        .WithMany()
+                        .HasForeignKey("SalesRepId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Plant");
+
+                    b.Navigation("SalesRep");
                 });
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Costing.PricingPolicy", b =>

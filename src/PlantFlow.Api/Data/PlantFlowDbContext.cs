@@ -12,6 +12,7 @@ using PlantFlow.Api.Domain.Pricing;
 using PlantFlow.Api.Domain.Orders;
 using PlantFlow.Api.Domain.Planning;
 using PlantFlow.Api.Domain.Ledger;
+using PlantFlow.Api.Domain.Targets;
 
 namespace PlantFlow.Api.Data;
 
@@ -74,6 +75,7 @@ public class PlantFlowDbContext : DbContext
     public DbSet<LedgerCreditUse> LedgerCreditUses => Set<LedgerCreditUse>();
     public DbSet<LedgerCorrection> LedgerCorrections => Set<LedgerCorrection>();
     public DbSet<LedgerClose> LedgerCloses => Set<LedgerClose>();
+    public DbSet<VolumeTarget> VolumeTargets => Set<VolumeTarget>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PlantFlowDbContext).Assembly);

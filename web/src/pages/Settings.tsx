@@ -10,6 +10,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import {
+    monthNames,
     offsetLabel,
     offsets,
     reasonFields,
@@ -479,17 +480,19 @@ function ReturnsSection({ settings }: { settings: TenantSettings }) {
 
 function SalesSection({ settings }: { settings: TenantSettings }) {
     const [days, setDays] = useState(String(settings.customerOwnershipDays));
+    const [yearStart, setYearStart] = useState(settings.yearStartMonth);
     const valid = wholeIn(days, 0, 3650);
 
     return (
         <Section
             title="Sales"
-            description="How long a sales rep keeps a customer to themselves."
+            description="How long a sales rep keeps a customer to themselves, and the year that sales targets are set in."
             settings={settings}
             draft={{
                 customerOwnershipDays: valid
                     ? Number(days)
                     : settings.customerOwnershipDays,
+                yearStartMonth: yearStart,
             }}
             valid={valid}
         >
@@ -500,6 +503,27 @@ function SalesSection({ settings }: { settings: TenantSettings }) {
                 onChange={setDays}
                 invalid={!valid}
             />
+            <Field
+                label="The year starts in"
+                hint={
+                    settings.yearStartLocked
+                        ? "Fixed now that targets are set, because it decides which months each quarter covers."
+                        : "Quarterly targets count from this month. Choose July for the Bangladesh fiscal year. It is fixed once the first target is set."
+                }
+            >
+                <select
+                    value={yearStart}
+                    onChange={(e) => setYearStart(Number(e.target.value))}
+                    disabled={settings.yearStartLocked}
+                    className={inputClass}
+                >
+                    {monthNames.map((m, i) => (
+                        <option key={m} value={i + 1}>
+                            {m}
+                        </option>
+                    ))}
+                </select>
+            </Field>
         </Section>
     );
 }

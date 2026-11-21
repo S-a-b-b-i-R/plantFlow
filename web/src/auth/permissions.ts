@@ -39,6 +39,8 @@ export const PERMISSIONS = {
     ordersConfirm: "orders.confirm",
     ordersClose: "orders.close",
     ordersBillingResolve: "orders.billing.resolve",
+    targetsView: "targets.view",
+    targetsManage: "targets.manage",
     ledgerView: "ledger.view",
     ledgerManage: "ledger.manage",
     ledgerApprove: "ledger.approve",

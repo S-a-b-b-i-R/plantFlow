@@ -17,8 +17,27 @@ export interface TenantSettings {
     utcOffsetMinutes: number;
     returnWindowMinutes: number;
     customerOwnershipDays: number;
+    // 1 = January (calendar year), 7 = July (Bangladesh fiscal year). Quarters for targets count from it.
+    yearStartMonth: number;
     timeZoneLocked: boolean;
+    // True once any target is set.
+    yearStartLocked: boolean;
 }
+
+export const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
 
 export const surveyLabel: Record<SurveyRequirement, string> = {
     Off: "Never",
