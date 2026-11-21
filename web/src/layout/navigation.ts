@@ -5,6 +5,7 @@ import {
     LuBuilding2,
     LuCalendarDays,
     LuCarFront,
+    LuPackage,
     LuClipboardList,
     LuFactory,
     LuFlaskConical,
@@ -104,6 +105,13 @@ export const navigation: NavItem[] = [
         to: "/fleet",
         label: "Fleet",
         icon: LuCarFront,
+        permissions: [PERMISSIONS.masterDataView],
+    },
+    {
+        // Everyone with master data access can look; Technical edits products and materials, Accounts edits charges.
+        to: "/catalogue",
+        label: "Catalogue",
+        icon: LuPackage,
         permissions: [PERMISSIONS.masterDataView],
     },
     {
