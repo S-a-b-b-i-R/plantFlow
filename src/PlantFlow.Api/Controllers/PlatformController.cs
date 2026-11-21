@@ -11,7 +11,16 @@ using PlantFlow.Api.Services;
 
 namespace PlantFlow.Api.Controllers;
 
-public record TenantSummaryDto(Guid Id, string Name, string Slug, TenantStatus Status, int UserCount);
+public record TenantSummaryDto(
+    Guid Id, string Name, string Slug, TenantStatus Status, int UserCount, int PendingCount = 0, int AdminCount = 0,
+    DateTime? CreatedAtUtc = null);
+
+public class TenantStatusRequest
+{
+    // Needed to suspend; optional when reactivating.
+    [StringLength(500)]
+    public string? Reason { get; init; }
+}
 
 public record UnassignedUserDto(
     Guid Id, string Email, string? DisplayName, UserStatus Status, bool IsPlatformAdmin, DateTime CreatedAtUtc);
@@ -41,6 +50,7 @@ public class PlatformController(
     PlantFlowDbContext db,
     ICurrentUser currentUser,
     RoleSeeder roleSeeder,
+    JoinCodes joinCodes,
     PermissionService permissionService,
     AuditWriter audit) : ControllerBase
 {
@@ -54,11 +64,23 @@ public class PlatformController(
 
         var counts = await db.Users.IgnoreQueryFilters()
             .GroupBy(u => u.TenantId)
-            .Select(g => new { TenantId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.TenantId, x => x.Count, cancellationToken);
+            .Select(g => new
+            {
+                TenantId = g.Key,
+                Count = g.Count(),
+                Pending = g.Count(u => u.Status == UserStatus.Pending),
+                Admins = g.Count(u => u.Status == UserStatus.Active
+                                      && u.UserRoles.Any(ur => ur.Role.SystemKey == DefaultRoles.AdminKey))
+            })
+            .ToDictionaryAsync(x => x.TenantId, cancellationToken);
 
         return tenants
-            .Select(t => new TenantSummaryDto(t.Id, t.Name, t.Slug, t.Status, counts.GetValueOrDefault(t.Id)))
+            .Select(t =>
+            {
+                var c = counts.GetValueOrDefault(t.Id);
+                return new TenantSummaryDto(t.Id, t.Name, t.Slug, t.Status, c?.Count ?? 0, c?.Pending ?? 0,
+                    c?.Admins ?? 0, t.CreatedAtUtc);
+            })
             .ToList();
     }
 
@@ -72,6 +94,7 @@ public class PlatformController(
         }
 
         var tenant = new Tenant { Name = request.Name.Trim(), Slug = request.Slug };
+        await joinCodes.RenewAsync(tenant, cancellationToken);
         db.Tenants.Add(tenant);
         audit.Record(tenant.Id, "tenant.created", "Tenant", tenant.Id.ToString(), new { tenant.Name, tenant.Slug });
         await db.SaveChangesAsync(cancellationToken);
@@ -80,7 +103,41 @@ public class PlatformController(
 
         return StatusCode(
             StatusCodes.Status201Created,
-            new TenantSummaryDto(tenant.Id, tenant.Name, tenant.Slug, tenant.Status, 0));
+            new TenantSummaryDto(tenant.Id, tenant.Name, tenant.Slug, tenant.Status, 0, CreatedAtUtc: tenant.CreatedAtUtc));
+    }
+
+    public const string SuspendReasonNeeded = "Give a reason for suspending this company.";
+
+    // Everyone in the company loses access at once and sees that access is paused. Nothing is deleted.
+    [HttpPost("tenants/{id:guid}/suspend")]
+    public Task<IActionResult> Suspend(Guid id, TenantStatusRequest request, CancellationToken cancellationToken) =>
+        SetStatusAsync(id, TenantStatus.Suspended, request.Reason, cancellationToken);
+
+    [HttpPost("tenants/{id:guid}/reactivate")]
+    public Task<IActionResult> Reactivate(Guid id, TenantStatusRequest request, CancellationToken cancellationToken) =>
+        SetStatusAsync(id, TenantStatus.Active, request.Reason, cancellationToken);
+
+    private async Task<IActionResult> SetStatusAsync(
+        Guid id, TenantStatus target, string? reason, CancellationToken cancellationToken)
+    {
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == id && t.Id != SystemTenant.Id, cancellationToken);
+        if (tenant is null) return Problem(title: "Company not found.", statusCode: StatusCodes.Status404NotFound);
+        if (tenant.Status == target)
+        {
+            return Problem(title: target == TenantStatus.Suspended
+                ? "This company is already suspended."
+                : "This company is already active.", statusCode: StatusCodes.Status409Conflict);
+        }
+        if (target == TenantStatus.Suspended && string.IsNullOrWhiteSpace(reason))
+        {
+            return Problem(title: SuspendReasonNeeded, statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        tenant.Status = target;
+        audit.Record(tenant.Id, target == TenantStatus.Suspended ? "tenant.suspended" : "tenant.reactivated",
+            "Tenant", tenant.Id.ToString(), new { Reason = reason?.Trim() });
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
     }
 
     // Everyone who has signed in but has not been given a company yet.

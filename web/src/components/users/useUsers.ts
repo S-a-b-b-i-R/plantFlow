@@ -95,3 +95,21 @@ export const useSetUserPlants = (userId: string) =>
             body: JSON.stringify({ plantIds }),
         }),
     );
+
+export interface JoinCode {
+    code: string;
+    renewedAtUtc: string | null;
+    method: "Code";
+}
+
+// The code people enter to ask to join this company.
+export const useJoinCode = () =>
+    useQuery({
+        queryKey: ["users", "join-code"],
+        queryFn: () => api<JoinCode>("/api/join-code"),
+    });
+
+export const useRenewJoinCode = () =>
+    useUserMutation(() =>
+        api<JoinCode>("/api/join-code/renew", { method: "POST" }),
+    );

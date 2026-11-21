@@ -9,6 +9,7 @@ import {
     LuScrollText,
     LuSettings,
     LuShieldCheck,
+    LuBuilding,
     LuClipboardList,
     LuFactory,
     LuFlaskConical,
@@ -21,7 +22,13 @@ import { can, PERMISSIONS } from "@/auth/permissions";
 import type { Me } from "@/lib/types";
 
 // The sidebar shows the groups in this order. A group with nothing the person can open is left out.
-export const navGroups = ["Operations", "Sales", "Finance", "Setup"] as const;
+export const navGroups = [
+    "Operations",
+    "Sales",
+    "Finance",
+    "Setup",
+    "Platform",
+] as const;
 export type NavGroup = (typeof navGroups)[number];
 
 export type NavItem = {
@@ -33,6 +40,8 @@ export type NavItem = {
     permissions: string[];
     // When set, one of these is also needed.
     anyOf?: string[];
+    // Only for PlantFlow's own platform admins, who have no company permissions.
+    platformOnly?: boolean;
 };
 
 export const navigation: NavItem[] = [
@@ -166,9 +175,18 @@ export const navigation: NavItem[] = [
         icon: LuSettings,
         permissions: [PERMISSIONS.settingsManage],
     },
+    {
+        to: "/platform",
+        group: "Platform",
+        label: "Companies",
+        icon: LuBuilding,
+        permissions: [],
+        platformOnly: true,
+    },
 ];
 
 export const canOpen = (me: Me, item: NavItem) =>
+    (item.platformOnly ? me.isPlatformAdmin : true) &&
     item.permissions.every((permission) => can(me, permission)) &&
     (!item.anyOf || item.anyOf.some((permission) => can(me, permission)));
 

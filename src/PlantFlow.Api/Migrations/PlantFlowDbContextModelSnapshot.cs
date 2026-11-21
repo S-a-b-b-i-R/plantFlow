@@ -418,6 +418,11 @@ namespace PlantFlow.Api.Migrations
                     b.Property<bool>("IsPlatformAdmin")
                         .HasColumnType("bit");
 
+                    b.Property<string>("JoinedVia")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -2294,6 +2299,18 @@ namespace PlantFlow.Api.Migrations
                     b.Property<int>("CustomerOwnershipDays")
                         .HasColumnType("int");
 
+                    b.Property<string>("JoinCode")
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<DateTime?>("JoinCodeRenewedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("JoinMethod")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<int>("LateThresholdMinutes")
                         .HasColumnType("int");
 
@@ -2357,6 +2374,10 @@ namespace PlantFlow.Api.Migrations
                         .HasColumnType("nvarchar(10)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("JoinCode")
+                        .IsUnique()
+                        .HasFilter("[JoinCode] IS NOT NULL");
 
                     b.HasIndex("Slug")
                         .IsUnique();

@@ -23,6 +23,7 @@ builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<PermissionService>();
 builder.Services.AddScoped<RoleSeeder>();
+builder.Services.AddScoped<JoinCodes>();
 builder.Services.AddScoped<AuditWriter>();
 builder.Services.AddScoped<FloorPriceCalculator>();
 builder.Services.AddScoped<PriceFinder>();
