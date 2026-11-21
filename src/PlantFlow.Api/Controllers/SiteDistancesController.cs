@@ -46,7 +46,7 @@ public class SiteDistancesController(PlantFlowDbContext db, ICurrentUser current
     }
 
     [HttpPut]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.CustomersManage)]
     public async Task<IActionResult> Set(Guid siteId, SetSiteDistancesRequest request, CancellationToken cancellationToken)
     {
         if (!await db.Sites.AnyAsync(s => s.Id == siteId, cancellationToken)) return NotFound();

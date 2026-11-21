@@ -15,6 +15,12 @@ public static class Permissions
     public const string MasterDataEdit = "masterdata.edit";
     // Plants, their shifts and batching plants. Kept apart from masterdata.edit so plant managers can set up plants.
     public const string PlantsManage = "plants.manage";
+    // Customers, their sites and site distances. A sales rep adds customers as their own.
+    public const string CustomersManage = "customers.manage";
+    // Choose or change a customer's sales rep, and manage the sales reps themselves.
+    public const string CustomersAssign = "customers.assign";
+    // Mark a customer VAT exempt. It changes invoices, so it stays with Accounts.
+    public const string CustomersVat = "customers.vat";
     public const string MixDesignsView = "mixdesigns.view";
     public const string MixDesignsEdit = "mixdesigns.edit";
     public const string MixDesignsApprove = "mixdesigns.approve";

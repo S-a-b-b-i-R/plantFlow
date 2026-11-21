@@ -13,21 +13,21 @@ public static class DefaultRoles
         ["Sales Representative"] =
         [
             MasterDataView, MixDesignsView, PricesView, OrdersView, OrdersCreate, OrdersEdit,
-            SiteSurveysView, DeliveriesTrack, TargetsView, DashboardsView
+            SiteSurveysView, DeliveriesTrack, TargetsView, DashboardsView, CustomersManage
         ],
 
         ["Sales Manager"] =
         [
             MasterDataView, MixDesignsView, PricesView, OrdersView, OrdersCreate, OrdersEdit,
             OrdersApproveSalesManager, OrdersConfirm, SiteSurveysView, DeliveriesTrack,
-            TargetsView, TargetsManage, LedgerView, DashboardsView
+            TargetsView, TargetsManage, LedgerView, DashboardsView, CustomersManage, CustomersAssign
         ],
 
         ["Accounts"] =
         [
             MasterDataView, MixDesignsView, CostsManage, PricesView, PricesEdit, PricesApprove,
             OrdersView, OrdersBillingResolve, LedgerView, LedgerManage,
-            TargetsView, DashboardsView
+            TargetsView, DashboardsView, CustomersVat
         ],
 
         ["Technical"] =

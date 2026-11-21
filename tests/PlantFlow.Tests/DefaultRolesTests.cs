@@ -40,6 +40,16 @@ public class DefaultRolesTests
     }
 
     [Fact]
+    public void Sales_manages_customers_managers_assign_reps_and_accounts_sets_vat_exemption()
+    {
+        string[] Holders(string key) => DefaultRoles.All.Where(r => r.Value.Contains(key)).Select(r => r.Key).Order().ToArray();
+
+        Assert.Equal(["Admin", "Sales Manager", "Sales Representative"], Holders(Permissions.CustomersManage));
+        Assert.Equal(["Admin", "Sales Manager"], Holders(Permissions.CustomersAssign));
+        Assert.Equal(["Accounts", "Admin"], Holders(Permissions.CustomersVat));
+    }
+
+    [Fact]
     public void Admin_role_has_every_permission()
     {
         Assert.Equal(Permissions.All.Order(), DefaultRoles.All["Admin"].Order());

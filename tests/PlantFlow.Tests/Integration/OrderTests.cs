@@ -371,7 +371,7 @@ public class OrderTests(ApiFactory factory)
         var unknownSite = await admin.GetAsync($"/api/sites/{Guid.NewGuid()}/distances");
         var otherCompany = await other.Admin.Client.GetAsync($"/api/sites/{siteId}/distances");
 
-        var rep = await factory.AddMemberAsync(company, "Sales Representative"); // masterdata.view only
+        var rep = await factory.AddMemberAsync(company, "Planner"); // masterdata.view, not customers.manage
         var readAsRep = await rep.Client.GetAsync($"/api/sites/{siteId}/distances");
         var writeAsRep = await rep.Client.PutAsJsonAsync($"/api/sites/{siteId}/distances",
             new { distances = new[] { new { plantId = p1, distanceKm = 5m } } });
