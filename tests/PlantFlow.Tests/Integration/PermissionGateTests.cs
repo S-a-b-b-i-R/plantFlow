@@ -67,7 +67,8 @@ public class PermissionGateTests(ApiFactory factory)
         var secondAdmin = await factory.AddMemberAsync(company, DefaultRoles.AdminRoleName);
         Assert.Equal(HttpStatusCode.OK, (await secondAdmin.Client.GetAsync("/api/users")).StatusCode);
 
-        (await company.Admin.Client.PostAsync($"/api/users/{secondAdmin.Id}/disable", null)).EnsureSuccessStatusCode();
+        (await company.Admin.Client.PostAsJsonAsync($"/api/users/{secondAdmin.Id}/disable", new { reason = "Left the company" }))
+            .EnsureSuccessStatusCode();
 
         Assert.Equal(HttpStatusCode.Forbidden, (await secondAdmin.Client.GetAsync("/api/users")).StatusCode);
     }
