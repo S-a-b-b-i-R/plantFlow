@@ -30,7 +30,8 @@ public class DemoDataTests(ApiFactory factory)
         Assert.Equal(6, await OfDemo(db.BatchingPlants).CountAsync());
         Assert.Equal(8, await OfDemo(db.PlantShifts).CountAsync());
         Assert.Equal(6, await OfDemo(db.SalesReps).CountAsync());
-        Assert.Equal(40, await OfDemo(db.Drivers).CountAsync());
+        Assert.Equal(32, await OfDemo(db.Drivers).CountAsync());
+        Assert.Equal(8, await OfDemo(db.PumpOperators).CountAsync(o => o.PumpId != null && o.Phone != null));
         Assert.Equal(32, await OfDemo(db.Vehicles).CountAsync(v => v.Type == VehicleType.TransitMixer));
         Assert.Equal(8, await OfDemo(db.Vehicles).CountAsync(v => v.Type == VehicleType.Pump));
         Assert.Equal(12, await OfDemo(db.Products).CountAsync());

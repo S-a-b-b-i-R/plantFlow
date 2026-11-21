@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using PlantFlow.Api.Controllers;
+using PlantFlow.Api.Infrastructure;
 
 namespace PlantFlow.Tests.Integration;
 
@@ -90,5 +91,20 @@ public class TenantIsolationTests(ApiFactory factory)
 
         Assert.Contains(auditOfA!, e => e.EntityId == memberOfA.Id.ToString());
         Assert.DoesNotContain(auditOfB!, e => e.EntityId == memberOfA.Id.ToString());
+    }
+
+    [Fact]
+    public async Task Another_companys_pump_operators_stay_hidden()
+    {
+        var a = await factory.CreateCompanyAsync();
+        var b = await factory.CreateCompanyAsync();
+        var created = await a.Admin.Client.PostAsJsonAsync("/api/pump-operators", new { name = "Jewel", phone = "01711000000" });
+        var operatorOfA = (await created.Content.ReadFromJsonAsync<PumpOperatorDto>(ApiFactory.Json))!;
+
+        var listedByB = await b.Admin.Client.GetFromJsonAsync<PagedResult<PumpOperatorDto>>("/api/pump-operators", ApiFactory.Json);
+        var getByB = await b.Admin.Client.GetAsync($"/api/pump-operators/{operatorOfA.Id}");
+
+        Assert.Empty(listedByB!.Items);
+        Assert.Equal(HttpStatusCode.NotFound, getByB.StatusCode);
     }
 }

@@ -40,6 +40,14 @@ public class DefaultRolesTests
     }
 
     [Fact]
+    public void Only_plant_managers_and_admins_manage_the_fleet()
+    {
+        var managers = DefaultRoles.All.Where(r => r.Value.Contains(Permissions.FleetManage)).Select(r => r.Key);
+
+        Assert.Equal(["Admin", "Plant Manager"], managers.Order());
+    }
+
+    [Fact]
     public void Sales_manages_customers_managers_assign_reps_and_accounts_sets_vat_exemption()
     {
         string[] Holders(string key) => DefaultRoles.All.Where(r => r.Value.Contains(key)).Select(r => r.Key).Order().ToArray();

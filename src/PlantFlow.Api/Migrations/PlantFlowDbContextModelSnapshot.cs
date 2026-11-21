@@ -882,6 +882,53 @@ namespace PlantFlow.Api.Migrations
                     b.ToTable("Products");
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.MasterData.PumpOperator", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid?>("PumpId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PumpId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("PumpOperators");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.MasterData.SalesRep", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1798,33 +1845,6 @@ namespace PlantFlow.Api.Migrations
                     b.ToTable("Pours");
                 });
 
-            modelBuilder.Entity("PlantFlow.Api.Domain.Planning.PumpCrewMember", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("VehicleId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId");
-
-                    b.HasIndex("VehicleId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("PumpCrewMembers");
-                });
-
             modelBuilder.Entity("PlantFlow.Api.Domain.Planning.ReturnedConcrete", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2586,6 +2606,22 @@ namespace PlantFlow.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("PlantFlow.Api.Domain.MasterData.PumpOperator", b =>
+                {
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.Vehicle", "Pump")
+                        .WithMany()
+                        .HasForeignKey("PumpId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Pump");
+                });
+
             modelBuilder.Entity("PlantFlow.Api.Domain.MasterData.SalesRep", b =>
                 {
                     b.HasOne("PlantFlow.Api.Domain.MasterData.SalesRep", null)
@@ -2888,7 +2924,7 @@ namespace PlantFlow.Api.Migrations
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Planning.Pour", b =>
                 {
-                    b.HasOne("PlantFlow.Api.Domain.MasterData.Driver", "Operator")
+                    b.HasOne("PlantFlow.Api.Domain.MasterData.PumpOperator", "Operator")
                         .WithMany()
                         .HasForeignKey("OperatorId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -2923,23 +2959,6 @@ namespace PlantFlow.Api.Migrations
                     b.Navigation("Pump");
 
                     b.Navigation("ShiftPlan");
-                });
-
-            modelBuilder.Entity("PlantFlow.Api.Domain.Planning.PumpCrewMember", b =>
-                {
-                    b.HasOne("PlantFlow.Api.Domain.Tenancy.Tenant", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("PlantFlow.Api.Domain.MasterData.Vehicle", "Vehicle")
-                        .WithMany()
-                        .HasForeignKey("VehicleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Vehicle");
                 });
 
             modelBuilder.Entity("PlantFlow.Api.Domain.Planning.ReturnedConcrete", b =>

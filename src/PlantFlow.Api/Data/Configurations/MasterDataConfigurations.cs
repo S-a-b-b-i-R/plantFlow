@@ -103,6 +103,21 @@ public class SiteConfiguration : IEntityTypeConfiguration<Site>
     }
 }
 
+public class PumpOperatorConfiguration : IEntityTypeConfiguration<PumpOperator>
+{
+    public void Configure(EntityTypeBuilder<PumpOperator> builder)
+    {
+        builder.HasKey(o => o.Id);
+        builder.Property(o => o.Name).HasMaxLength(100).IsRequired();
+        builder.Property(o => o.Phone).HasMaxLength(30);
+        builder.Property(o => o.Status).HasConversion<string>().HasMaxLength(20);
+        builder.HasIndex(o => o.PumpId);
+
+        builder.HasOne(o => o.Pump).WithMany().HasForeignKey(o => o.PumpId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Tenant>().WithMany().HasForeignKey(o => o.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public class DriverConfiguration : IEntityTypeConfiguration<Driver>
 {
     public void Configure(EntityTypeBuilder<Driver> builder)

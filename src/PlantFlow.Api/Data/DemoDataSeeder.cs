@@ -106,7 +106,7 @@ public static class DemoDataSeeder
             EndTime = TimeOnly.Parse(s.End)
         }));
 
-        // ---- Drivers and vehicles: every vehicle gets its own default driver ----
+        // ---- Vehicles: every mixer gets its own default driver, every pump an operator ----
         var vehicleSpecs = new (int Plant, int Mixers, int Pumps)[] { (0, 14, 3), (1, 10, 3), (2, 8, 2) };
         decimal[] mixerCapacities = [282m, 353m, 250m];
         var sequence = 0;
@@ -122,9 +122,6 @@ public static class DemoDataSeeder
                 var isMixer = i < mixers;
                 var code = isMixer ? $"TM-{++mixerNumber:00}" : $"PU-{++pumpNumber:00}";
 
-                var driver = new Driver { TenantId = tenantId, Name = PersonName(sequence), Phone = Phone(sequence) };
-                db.Drivers.Add(driver);
-
                 var status = code switch
                 {
                     "TM-07" or "PU-03" => VehicleStatus.Maintenance,
@@ -132,7 +129,7 @@ public static class DemoDataSeeder
                     _ => VehicleStatus.Available
                 };
 
-                db.Vehicles.Add(new Vehicle
+                var vehicle = new Vehicle
                 {
                     TenantId = tenantId,
                     PlantId = plants[plantIndex].Id,
@@ -140,9 +137,24 @@ public static class DemoDataSeeder
                     Type = isMixer ? VehicleType.TransitMixer : VehicleType.Pump,
                     CapacityCft = isMixer ? mixerCapacities[mixerNumber % 3] : null,
                     PlateNumber = $"{platePrefix}-MX-{1000 + sequence * 13}",
-                    DefaultDriverId = status == VehicleStatus.Retired ? null : driver.Id,
                     Status = status
-                });
+                };
+                db.Vehicles.Add(vehicle);
+
+                // Mixers have a driver; a pump has its own operator instead.
+                if (isMixer)
+                {
+                    var driver = new Driver { TenantId = tenantId, Name = PersonName(sequence), Phone = Phone(sequence) };
+                    db.Drivers.Add(driver);
+                    if (status != VehicleStatus.Retired) vehicle.DefaultDriverId = driver.Id;
+                }
+                else
+                {
+                    db.PumpOperators.Add(new PumpOperator
+                    {
+                        TenantId = tenantId, Name = PersonName(sequence), Phone = Phone(sequence), PumpId = vehicle.Id
+                    });
+                }
 
                 sequence++;
             }

@@ -10,9 +10,11 @@ using PlantFlow.Api.Services;
 
 namespace PlantFlow.Api.Controllers;
 
+// CrewCount: active pump operators on a pump's crew (0 for mixers).
 public record VehicleDto(
     Guid Id, Guid PlantId, string PlantCode, string Code, VehicleType Type, decimal? CapacityCft,
-    string? PlateNumber, Guid? DefaultDriverId, string? DefaultDriverName, VehicleStatus Status, int? AssemblyMinutes);
+    string? PlateNumber, Guid? DefaultDriverId, string? DefaultDriverName, VehicleStatus Status, int? AssemblyMinutes,
+    int CrewCount);
 
 public class VehicleRequest
 {
@@ -31,6 +33,7 @@ public class VehicleRequest
     [StringLength(30)]
     public string? PlateNumber { get; init; }
 
+    // Transit mixers only. A pump's crew are pump operators, not drivers.
     public Guid? DefaultDriverId { get; init; }
 
     public VehicleStatus Status { get; init; } = VehicleStatus.Available;
@@ -42,11 +45,15 @@ public class VehicleRequest
 
 [ApiController]
 [Route("api/vehicles")]
-public class VehiclesController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit) : ControllerBase
+public class VehiclesController(PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit, FleetUsage usage)
+    : ControllerBase
 {
-    private static readonly Expression<Func<Vehicle, VehicleDto>> ToDto = v => new VehicleDto(
+    public const string PumpDriverRefused = "A pump has no driver. Its crew are pump operators.";
+
+    private Expression<Func<Vehicle, VehicleDto>> ToDto => v => new VehicleDto(
         v.Id, v.PlantId, v.Plant.Code, v.Code, v.Type, v.CapacityCft, v.PlateNumber,
-        v.DefaultDriverId, v.DefaultDriver != null ? v.DefaultDriver.Name : null, v.Status, v.AssemblyMinutes);
+        v.DefaultDriverId, v.DefaultDriver != null ? v.DefaultDriver.Name : null, v.Status, v.AssemblyMinutes,
+        db.PumpOperators.Count(o => o.PumpId == v.Id && o.Status == ActiveStatus.Active));
 
     // ?search= matches code or plate.  ?plantId=  ?type=  ?status=  ?sort=code|capacity, "-" for descending.
     [HttpGet]
@@ -88,7 +95,7 @@ public class VehiclesController(PlantFlowDbContext db, ICurrentUser currentUser,
     }
 
     [HttpPost]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.FleetManage)]
     public async Task<ActionResult<VehicleDto>> Create(VehicleRequest request, CancellationToken cancellationToken)
     {
         var (code, plate) = Normalize(request);
@@ -120,11 +127,25 @@ public class VehiclesController(PlantFlowDbContext db, ICurrentUser currentUser,
     }
 
     [HttpPut("{id:guid}")]
-    [HasPermission(Permissions.MasterDataEdit)]
+    [HasPermission(Permissions.FleetManage)]
     public async Task<IActionResult> Update(Guid id, VehicleRequest request, CancellationToken cancellationToken)
     {
         var vehicle = await db.Vehicles.FirstOrDefaultAsync(v => v.Id == id, cancellationToken);
         if (vehicle is null) return NotFound();
+
+        // Taking a vehicle out of use, moving it or changing its type is refused while it has work.
+        var change = TakesOutOfUse(vehicle, request);
+        if (change is not null && await usage.RefusalAsync(vehicle, change, cancellationToken) is { } refusal)
+        {
+            return Problem(title: refusal, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (request.Type != vehicle.Type && vehicle.Type == VehicleType.Pump
+            && await db.PumpOperators.AnyAsync(o => o.PumpId == id, cancellationToken))
+        {
+            return Problem(title: "Take the operators off this pump's crew before you make it a mixer.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         var (code, plate) = Normalize(request);
 
@@ -157,6 +178,20 @@ public class VehiclesController(PlantFlowDbContext db, ICurrentUser currentUser,
         return NoContent();
     }
 
+    // What the request does that needs the vehicle to be free, in words for the refusal. Null when nothing.
+    private static string? TakesOutOfUse(Vehicle vehicle, VehicleRequest request)
+    {
+        if (request.PlantId != vehicle.PlantId) return "move it to another plant";
+        if (request.Type != vehicle.Type) return "change its type";
+        if (request.Status == vehicle.Status) return null;
+        return request.Status switch
+        {
+            VehicleStatus.Maintenance => "send it for maintenance",
+            VehicleStatus.Retired => "retire it",
+            _ => null
+        };
+    }
+
     private static (string Code, string? Plate) Normalize(VehicleRequest request)
     {
         var plate = string.IsNullOrWhiteSpace(request.PlateNumber) ? null : request.PlateNumber.Trim().ToUpperInvariant();
@@ -170,6 +205,11 @@ public class VehiclesController(PlantFlowDbContext db, ICurrentUser currentUser,
         if (request.Type == VehicleType.TransitMixer && request.CapacityCft is null)
         {
             return Problem(title: "A transit mixer needs a capacity in CFT.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (request.Type == VehicleType.Pump && request.DefaultDriverId is not null)
+        {
+            return Problem(title: PumpDriverRefused, statusCode: StatusCodes.Status400BadRequest);
         }
 
         // The tenant filter means a plant or driver of another company is simply not found.

@@ -90,10 +90,10 @@ export interface PumpOption {
     code: string;
     type: "Pump" | "TransitMixer";
     status: "Available" | "InService" | "Maintenance" | "Retired";
-    defaultDriverName: string | null;
 }
 
-export interface DriverOption {
+// Someone in a pump's crew. A pour's operator is picked from them.
+export interface CrewOption {
     id: string;
     name: string;
 }

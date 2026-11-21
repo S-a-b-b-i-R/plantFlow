@@ -21,6 +21,7 @@ public static class Permissions
     public const string CustomersAssign = "customers.assign";
     // Mark a customer VAT exempt. It changes invoices, so it stays with Accounts.
     public const string CustomersVat = "customers.vat";
+    public const string FleetManage = "fleet.manage";
     public const string MixDesignsView = "mixdesigns.view";
     public const string MixDesignsEdit = "mixdesigns.edit";
     public const string MixDesignsApprove = "mixdesigns.approve";
