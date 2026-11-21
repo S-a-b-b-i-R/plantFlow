@@ -24,7 +24,7 @@ public static class DefaultRoles
         [
             MasterDataView, MixDesignsView, PricesView, OrdersView, OrdersCreate, OrdersEdit,
             OrdersApproveSalesManager, OrdersConfirm, SiteSurveysView, DeliveriesTrack,
-            TargetsView, TargetsManage, LedgerView, DashboardsView, CustomersManage, CustomersAssign
+            TargetsView, TargetsManage, LedgerView, LedgerApprove, DashboardsView, CustomersManage, CustomersAssign
         ],
 
         ["Accounts"] =

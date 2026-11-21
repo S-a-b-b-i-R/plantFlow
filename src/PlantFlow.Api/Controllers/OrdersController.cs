@@ -132,7 +132,7 @@ public class CancelOrderRequest
 public class OrdersController(
     PlantFlowDbContext db, ICurrentUser currentUser, AuditWriter audit,
     FloorPriceCalculator calculator, PriceFinder finder, OrderApprovalFlow flow, OrderChargeCalculator chargeCalculator,
-    OrderSurveys surveys, CustomerOwnership ownership) : ControllerBase
+    OrderSurveys surveys, CustomerOwnership ownership, CustomerLedger ledger) : ControllerBase
 {
     public const string NoRepLink =
         "Your login is not linked to a sales rep. Ask a sales manager to link it before you create orders.";
@@ -471,9 +471,20 @@ public class OrdersController(
         flow.WithdrawPending(order);
         flow.ChangeStatus(order, OrderStatus.Cancelled, order.CancelReason);
 
+        // A running order put on hold can be cancelled. Any credit it was using goes back to the customer.
+        await ledger.ReleaseUsesAsync(order, cancellationToken);
+
         audit.Record(order.TenantId, "order.cancelled", "Order", order.Id.ToString(),
             new { order.Number, From = from.ToString(), order.CancelReason });
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Problem(title: CustomerLedger.ChangedMessage, statusCode: StatusCodes.Status409Conflict);
+        }
+
         return NoContent();
     }
 

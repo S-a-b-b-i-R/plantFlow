@@ -37,6 +37,7 @@ builder.Services.AddScoped<PlantScope>();
 builder.Services.AddScoped<PlantUsage>();
 builder.Services.AddScoped<CustomerOwnership>();
 builder.Services.AddScoped<FleetUsage>();
+builder.Services.AddScoped<CustomerLedger>();
 builder.Services.AddDbContext<PlantFlowDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddHealthChecks().AddDbContextCheck<PlantFlowDbContext>("database");

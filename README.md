@@ -71,7 +71,8 @@ The batching console is built for the operator, on a tablet or a desktop. Each p
 | Audit log screen: filter by company day, person, record and text; CSV export (audited, 10,000 rows max) | Done    |
 | Company onboarding: platform console (create, suspend with a reason, place first Admin), join codes for staff | Done    |
 | Setup checklist: a Get started list for a new company's Admin, progress per company on the platform console | Done    |
-| Quarterly volume targets, customer volume ledger                                                     | Planned |
+| Customer volume ledger: carry short-closed volume forward at the order price, use it on later orders, close with approval | Done    |
+| Quarterly volume targets against billed volume                                                       | Planned |
 
 ## Architecture
 
@@ -197,7 +198,7 @@ Integration tests start a throwaway SQL Server container (Docker must be running
 
 1. **Shift planning screens in the web app**
 2. **Administration screens:** assigning users to companies, roles and permissions (assigning users to plants is done)
-3. **Targets and ledger:** quarterly volume targets against billed volume, customer volume ledger
+3. **Targets:** quarterly volume targets against billed volume (the customer volume ledger is done)
 4. **Web tests:** component tests for the console and the board
 5. **Deployment:** a hosted demo
    Later: real-time updates (SignalR) instead of polling, a driver mobile app with GPS, notifications, invoicing, material stock, exports, Bangla and English.

@@ -20,6 +20,8 @@ export function useOrderAct() {
                 queryClient.invalidateQueries({ queryKey: ["order"] }),
                 queryClient.invalidateQueries({ queryKey: ["orders"] }),
                 queryClient.invalidateQueries({ queryKey: ["invoice"] }),
+                // Closing, cancelling or using credit changes the customer's ledger.
+                queryClient.invalidateQueries({ queryKey: ["ledger"] }),
             ]),
     });
 }

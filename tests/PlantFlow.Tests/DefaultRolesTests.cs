@@ -67,6 +67,16 @@ public class DefaultRolesTests
     }
 
     [Fact]
+    public void Accounts_manages_the_ledger_and_sales_managers_approve_closing_credits()
+    {
+        string[] Holders(string key) => DefaultRoles.All.Where(r => r.Value.Contains(key)).Select(r => r.Key).Order().ToArray();
+
+        Assert.Equal(["Accounts", "Admin"], Holders(Permissions.LedgerManage));
+        Assert.Equal(["Admin", "Sales Manager"], Holders(Permissions.LedgerApprove));
+        Assert.Equal(["Accounts", "Admin", "Credit", "Sales Manager"], Holders(Permissions.LedgerView));
+    }
+
+    [Fact]
     public void Admin_role_has_every_permission()
     {
         Assert.Equal(Permissions.All.Order(), DefaultRoles.All["Admin"].Order());
